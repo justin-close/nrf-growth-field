@@ -16,7 +16,7 @@ test('motion sanitization preserves accepted values and bounds duration/energy/s
   assert.deepEqual(sanitizeMotion(), motionDefaults);
   assert.deepEqual(sanitizeMotion({ motion: 'unknown', duration: NaN, energy: Infinity, stagger: '50', loop: 'false', turntable: 1 }), motionDefaults);
   assert.deepEqual(sanitizeMotion({ motion: 'pulse', duration: 40, energy: -1, stagger: 200, loop: true, turntable: true }), {
-    motion: 'pulse', duration: 24, energy: 0, stagger: 100, loop: true, turntable: true
+    sequence: 'growth', motion: 'pulse', duration: 24, energy: 0, stagger: 100, loop: true, turntable: true
   });
   assert.equal(sanitizeMotion({ duration: 1 }).duration, 6);
   assert.equal(sanitizeMotion({ duration: 7.5 }).duration, 7.5);

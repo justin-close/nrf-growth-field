@@ -133,8 +133,10 @@ async function waitForQueue(encoder, session) {
  * the final frame is shortened to keep the requested duration, to 1 microsecond.
  * Visual sampling spans [0, 1] over the available frames, including the completed
  * composition in the final frame without adding an extra frame to the clip.
+ * Seamless loops sample [0, 1) at presentation time so the join has no duplicate
+ * endpoint or extra hold frame.
  */
-export async function exportGrowthVideo({ width, height, duration, fps = 30, renderFrame, onProgress, signal } = {}) {
+export async function exportGrowthVideo({ width, height, duration, fps = 30, renderFrame, onProgress, signal, seamlessLoop = false } = {}) {
   const invalid = dimensionsError(width, height, fps);
   if (invalid) throw new Error(invalid);
   if (!Number.isFinite(duration) || duration < 2 / fps || duration > 120) {
@@ -196,7 +198,7 @@ export async function exportGrowthVideo({ width, height, duration, fps = 30, ren
     for (let index = 0; index < frames; index++) {
       session.check();
       await waitForQueue(encoder, session);
-      const timeline = index / (frames - 1);
+      const timeline = seamlessLoop ? index / (duration * fps) : index / (frames - 1);
       const canvas = await session.wait(
         renderFrame(timeline, timeline * duration), 30_000,
         'A video frame took too long to render. Try the smaller video size.'

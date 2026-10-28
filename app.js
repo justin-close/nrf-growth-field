@@ -48,14 +48,14 @@ function viewSnapshot(){return{position:camera.position.toArray(),target:control
 function validVector(v){return Array.isArray(v)&&v.length===3&&v.every(n=>typeof n==='number'&&Number.isFinite(n)&&Math.abs(n)<1000);}
 function applyView(v){if(v&&validVector(v.position)&&validVector(v.target)&&new THREE.Vector3(...v.position).distanceTo(new THREE.Vector3(...v.target))>1){camera.position.fromArray(v.position);controls.target.fromArray(v.target);const distance=camera.position.distanceTo(controls.target);controls.maxDistance=Math.max(65,distance*1.5);camera.far=Math.max(200,distance*4);camera.updateProjectionMatrix();controls.update();dirty=true;}else resetView();}
 function resetView(view='perspective'){
-  const dir=view==='front'?new THREE.Vector3(0,0,1):view==='top'?new THREE.Vector3(0,1,.001):state.form==='cascading'?new THREE.Vector3(.72,.78,.8).normalize():model?.kind==='field'?new THREE.Vector3(.12,.4,1).normalize():new THREE.Vector3(.74,.28,.8).normalize();
+  const dir=view==='current'?camera.position.clone().sub(controls.target).normalize():view==='front'?new THREE.Vector3(0,0,1):view==='top'?new THREE.Vector3(0,1,.001):state.form==='cascading'?new THREE.Vector3(.72,.78,.8).normalize():model?.kind==='field'?new THREE.Vector3(.12,.4,1).normalize():new THREE.Vector3(.74,.28,.8).normalize();
   const right=new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0),dir).normalize();
   const up=new THREE.Vector3().crossVectors(dir,right).normalize();
   art.updateMatrixWorld();
   const fittingPoints=model?(model.framingPoints||model.points.map(p=>p.pos)):[];
   const viewPoints=fittingPoints.map(p=>art.localToWorld(new THREE.Vector3(...p)));
   const box=model?new THREE.Box3().setFromPoints(viewPoints):new THREE.Box3(new THREE.Vector3(-4,-3,-3),new THREE.Vector3(4,3,3));
-  const center=state.turntable&&model?pivot.clone():box.getCenter(new THREE.Vector3()),tan=Math.tan(camera.fov*Math.PI/360);
+  const center=(state.turntable||state.sequence==='orbit')&&model?pivot.clone():box.getCenter(new THREE.Vector3()),tan=Math.tan(camera.fov*Math.PI/360);
   const compact=matchMedia('(max-width:620px)').matches,offsetX=compact?0:.1,offsetY=compact?.22:.1,marginX=compact?.88:.82,marginTop=compact?.36:.72,marginBottom=.72;
   let d=14;
   const include=point=>{
@@ -64,11 +64,11 @@ function resetView(view='perspective'){
     d=Math.max(d,(x+marginX*z)/(marginX-offsetX),(-x+marginX*z)/(marginX+offsetX),(y+marginTop*z)/(marginTop+offsetY),(-y+marginBottom*z)/(marginBottom-offsetY));
   };
   for(const point of viewPoints)include(point);
-  if(state.turntable&&model)for(let step=0;step<24;step++)for(const point of fittingPoints)include(new THREE.Vector3(...point).sub(pivot).applyAxisAngle(new THREE.Vector3(0,1,0),step*Math.PI/12).add(pivot));
+  if((state.turntable||state.sequence==='orbit')&&model)for(let step=0;step<24;step++)for(const point of fittingPoints)include(new THREE.Vector3(...point).sub(pivot).applyAxisAngle(new THREE.Vector3(0,1,0),step*Math.PI/12).add(pivot));
   controls.maxDistance=Math.max(65,d*1.5);camera.far=Math.max(200,d*4);camera.updateProjectionMatrix();
   controls.target.copy(center).addScaledVector(up,d*tan*offsetY).addScaledVector(right,-d*tan*camera.aspect*offsetX);
   camera.position.copy(controls.target).addScaledVector(dir,d);
-  controls.update();$$('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);b.setAttribute('aria-pressed',b.dataset.view===view);});dirty=true;
+  controls.update();if(view!=='current')$$('[data-view]').forEach(b=>{b.classList.toggle('active',b.dataset.view===view);b.setAttribute('aria-pressed',b.dataset.view===view);});dirty=true;
 }
 function disposeGroup(group){const geometries=new Set(),materials=new Set(),textures=new Set();group.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of (Array.isArray(o.material)?o.material:o.material?[o.material]:[])){materials.add(m);if(m.map)textures.add(m.map);}});geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());group.clear();}
 function makeMaterial(points){
@@ -147,6 +147,13 @@ function updatePalette(){
   $$('[data-palette]').forEach(b=>{const active=+b.dataset.palette===state.palette;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active);});dirty=true;
 }
 function updateReadouts(){
+  updateModelReadouts();
+  if(state.sequence==='orbit'){
+    $('motion-phase').textContent='Orbit loop';$('progress-label').textContent=`${(state.progress*state.duration).toFixed(1)} / ${state.duration} S · FULLY GROWN`;
+    $('growth-readout').textContent=Math.round(state.progress*360)+'°';$('growth-readout').title='Turntable rotation';
+  }
+}
+function updateModelReadouts(){
   const frame=motionFrame||timelineAt(state.progress,state),g=frame.growth*state.generations;
   if(fieldArtwork){
     const pose=fieldArtwork.snapshot();
@@ -198,12 +205,33 @@ function syncUI(){
   $('population-controls').hidden=field;$('field-controls').hidden=!field;
   for(const id of ['generative-controls','motion-style-controls','motion-description','motion-detail-controls','generative-variation','seed-label'])$(id).hidden=surface;
   $('node-unit').textContent=surface?'MESH DOTS':'DOTS';$('edge-unit').textContent=surface?'SEGMENTS':field?'TRAJECTORIES':'CONNECTIONS';$('axis-key').hidden=surface||field;
+  syncSequenceUI();
   const f=forms[state.form];$('study-number').textContent=f.number;$('study-label').textContent=f.label;$('stage-description').textContent=f.description;updatePlayButton();
+}
+function syncSequenceUI(){
+  const orbit=state.sequence==='orbit',surface=state.form==='cascading';
+  $('sequence').value=$('video-sequence').value=state.sequence;
+  $('sequence-description').hidden=!orbit;
+  for(const id of ['motion-style-controls','motion-description','motion-detail-controls'])$(id).hidden=orbit||surface;
+  for(const id of ['growth-loop-control','growth-turntable-control','auto-orbit-control'])$(id).hidden=orbit;
+  $('duration-label').textContent=orbit?'Revolution duration':'Duration';
+  $('preview-motion').innerHTML=orbit?'Preview orbit loop <span>↗</span>':'Preview from the beginning <span>↗</span>';
+  $('progress-accessible-label').textContent=orbit?'Orbit progress':'Growth progress';
+  $('restart').setAttribute('aria-label',orbit?'Restart orbit loop':'Restart growth animation');
+  $('restart').title=orbit?'Restart orbit loop':'Restart growth';$('play').title=orbit?'Play / pause orbit (Space)':'Play / pause growth (Space)';
+  $('video-description').textContent=orbit?'A fully grown visualization in a seamless 360° turntable loop. Artwork only.':'The complete growth sequence, with your colors and camera. Artwork only.';
+}
+function setSequence(sequence){
+  state.sequence=sequence;state.progress=sequence==='orbit'?0:state.loop?.5:1;playing=false;
+  syncUI();updateProgress();resetView('current');persist();
+  if($('export-dialog').open)updateVideoOptions();
 }
 function scheduleRebuild(){clearTimeout(rebuildTimer);rebuildTimer=setTimeout(()=>{rebuild();persist();},70);}
 function initUI(){
+  $('sequence').onchange=()=>setSequence($('sequence').value);
+  $('video-sequence').onchange=()=>setSequence($('video-sequence').value);
   palettes.forEach((p,i)=>{const b=document.createElement('button');b.className='palette-swatch';b.dataset.palette=i;b.style.background=p.bg;b.title=p.name;b.setAttribute('aria-label',p.name);b.innerHTML=`<svg viewBox="0 0 28 26" aria-hidden="true"><g fill="${p.primary}"><circle cx="7" cy="7" r="3"/><circle cx="21" cy="7" r="3"/><circle cx="7" cy="21" r="3"/><circle cx="21" cy="21" r="3"/></g></svg>`;b.onclick=()=>{state.palette=i;updatePalette();persist();};$('palettes').append(b);});
-  $$('[data-form]').forEach(b=>b.onclick=()=>{state.form=b.dataset.form;playing=false;state.progress=state.loop?.5:1;syncUI();rebuild();resetView();persist();});
+  $$('[data-form]').forEach(b=>b.onclick=()=>{state.form=b.dataset.form;playing=false;state.progress=state.sequence==='orbit'?0:state.loop?.5:1;syncUI();rebuild();resetView();persist();});
   $$('[data-style]').forEach(b=>b.onclick=()=>{state.style=b.dataset.style;if(fieldArtwork)fieldArtwork.setStyle(state);else if(cascadingArtwork)cascadingArtwork.setStyle(state);else{art.getObjectByName('dots').visible=state.style!=='filaments';art.getObjectByName('lines').visible=state.style!=='dots';}syncUI();updateReadouts();dirty=true;persist();});
   for(const key of ['rate','generations','spread','depth','twist','folds','foldAmplitude','density'])$(key).addEventListener('input',()=>{state[key]=+$(key).value;syncUI();scheduleRebuild();});
   const updateFinish=()=>{if(fieldArtwork)fieldArtwork.setStyle(state);else if(cascadingArtwork)cascadingArtwork.setStyle(state);else{dotMaterial.uniforms.uSize.value=state.dotSize;lineMaterial.uniforms.uOpacity.value=state.lineOpacity/100;lineMaterial.uniforms.uFinish.value=filamentFinishMode(state.filamentFinish);lineMaterial.uniforms.uFadeStrength.value=state.fadeStrength/100;}syncUI();dirty=true;persist();};
@@ -234,11 +262,11 @@ function initUI(){
 }
 function toggleFocus(){const on=document.body.classList.toggle('focus-mode');$('exit-focus').hidden=!on;if(on)$('viewport').focus();else $('focus').focus();}
 function togglePlay(){playing=!playing;if(playing&&state.progress>=.999)state.progress=0;updatePlayButton();updateProgress();if(!playing)persist();}
-function updatePlayButton(){$('play').setAttribute('aria-label',playing?'Pause growth animation':'Play growth animation');$('play').innerHTML=playing?'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3H8V17H5ZM12 3H15V17H12Z"/></svg>':'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3L17 10L6 17Z"/></svg>';}
+function updatePlayButton(){$('play').setAttribute('aria-label',playing?(state.sequence==='orbit'?'Pause orbit loop':'Pause growth animation'):(state.sequence==='orbit'?'Play orbit loop':'Play growth animation'));$('play').innerHTML=playing?'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M5 3H8V17H5ZM12 3H15V17H12Z"/></svg>':'<svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3L17 10L6 17Z"/></svg>';}
 function animate(now){
   requestAnimationFrame(animate);if(document.hidden||exporting){lastTime=0;return;}
-  const dt=lastTime?Math.min((now-lastTime)/1000,.1):0;lastTime=now;controls.autoRotate=state.autoOrbit;controls.update(dt);
-  if(playing){state.progress+=dt/state.duration;if(state.progress>=1){if(state.loop)state.progress%=1;else{state.progress=1;playing=false;updatePlayButton();persist();}}updateProgress();}
+  const dt=lastTime?Math.min((now-lastTime)/1000,.1):0;lastTime=now;controls.autoRotate=state.autoOrbit&&state.sequence!=='orbit';controls.update(dt);
+  if(playing){state.progress+=dt/state.duration;if(state.progress>=1){if(state.loop||state.sequence==='orbit')state.progress%=1;else{state.progress=1;playing=false;updatePlayButton();persist();}}updateProgress();}
   if(dirty||state.autoOrbit||playing){renderer.render(scene,camera);dirty=false;}
 }
 function persist(){if(!camera)return;try{localStorage.setItem(STORAGE,JSON.stringify({state,view:viewSnapshot(),saved}));}catch{}}
@@ -256,9 +284,9 @@ function captureView(width,height,transparent=false,fitArtwork=false){
   if(fitArtwork){
     const dir=camera.position.clone().sub(controls.target).normalize(),right=new THREE.Vector3().crossVectors(camera.up,dir).normalize(),up=new THREE.Vector3().crossVectors(dir,right).normalize(),tan=Math.tan(camera.fov*Math.PI/360);
     let distance=4;
-    const turns=state.turntable?24:1;
+    const turns=state.turntable||state.sequence==='orbit'?24:1;
     for(let step=0;step<turns;step++)for(const point of (model.framingPoints||model.points.map(p=>p.pos))){
-      const angle=state.turntable?step*Math.PI/12:0,v=new THREE.Vector3(...point).sub(pivot).applyAxisAngle(new THREE.Vector3(0,1,0),angle),z=v.dot(dir);
+      const angle=state.turntable||state.sequence==='orbit'?step*Math.PI/12:0,v=new THREE.Vector3(...point).sub(pivot).applyAxisAngle(new THREE.Vector3(0,1,0),angle),z=v.dot(dir);
       distance=Math.max(distance,Math.abs(v.dot(right))/(tan*aspect*.84)+z,Math.abs(v.dot(up))/(tan*.84)+z);
     }
     camera.position.copy(pivot).addScaledVector(dir,distance);camera.lookAt(pivot);camera.updateMatrixWorld();
@@ -284,7 +312,7 @@ function videoDimensions(){
 }
 async function updateVideoOptions(){
   const revision=++supportRevision,{width,height}=videoDimensions();
-  $('video-summary').textContent=`${width} × ${height} · ${state.duration} seconds · 30 fps · ${state.loop?'Grow & return loop':'Growth + final hold'}${state.turntable?' · Turntable':''}`;
+  $('video-summary').textContent=`${width} × ${height} · ${state.duration} seconds · 30 fps · ${state.sequence==='orbit'?'Seamless 360° orbit loop':state.loop?'Grow & return loop':'Growth + final hold'}${state.turntable&&state.sequence!=='orbit'?' · Turntable':''}`;
   $('export-video').disabled=true;$('video-support').textContent='Checking MP4 support…';
   const support=await checkVideoSupport({width,height});if(revision!==supportRevision||exporting)return;
   $('export-video').disabled=!support.supported;$('video-support').textContent=support.supported?'H.264 MP4 · Solid background · Silent video':support.reason;
@@ -295,7 +323,7 @@ async function exportVideo(){
   $('video-progress').value=0;$('export-percent').textContent='0%';$('export-status').textContent='Preparing video…';let restore;
   try{
     restore=captureView(width,height,false,$('video-ratio').value!=='current');
-    const result=await exportGrowthVideo({width,height,duration:state.duration,fps:30,signal:exportController.signal,
+    const result=await exportGrowthVideo({width,height,duration:state.duration,fps:30,seamlessLoop:state.sequence==='orbit',signal:exportController.signal,
       renderFrame:progress=>{applyFrame(progress);renderer.render(scene,camera);return renderer.domElement;},
       onProgress:({phase,progress,frame,frames})=>{$('video-progress').value=progress;$('export-percent').textContent=Math.round(progress*100)+'%';$('export-status').textContent=phase==='rendering'?`Rendering frame ${frame} / ${frames}`:phase==='finalizing'?'Finishing your MP4…':phase==='complete'?'Video ready':'Preparing video…';}
     });

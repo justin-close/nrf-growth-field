@@ -1,9 +1,10 @@
 // One deterministic clock drives preview, scrubbing, stills, and encoded video.
 const clamp=(v,a=0,b=1)=>Math.max(a,Math.min(b,v));
 const smooth=t=>{t=clamp(t);return t*t*(3-2*t);};
-export const motionDefaults={motion:'cascade',duration:12,energy:55,stagger:50,loop:false,turntable:false};
+export const motionDefaults={sequence:'growth',motion:'cascade',duration:12,energy:55,stagger:50,loop:false,turntable:false};
 export function sanitizeMotion(input={}){
   const s={...motionDefaults};
+  if(['growth','orbit'].includes(input.sequence))s.sequence=input.sequence;
   if(['cascade','unfurl','pulse'].includes(input.motion))s.motion=input.motion;
   for(const [key,min,max] of [['duration',6,24],['energy',0,100],['stagger',0,100]])if(typeof input[key]==='number'&&Number.isFinite(input[key]))s[key]=clamp(input[key],min,max);
   for(const key of ['loop','turntable'])if(typeof input[key]==='boolean')s[key]=input[key];
@@ -11,6 +12,7 @@ export function sanitizeMotion(input={}){
 }
 export function timelineAt(progress,state){
   const p=clamp(progress),loop=state.loop;
+  if(state.sequence==='orbit')return{progress:p,growth:1,clock:state.generations+1.25,phase:'Orbit loop',pulse:0,turn:p*Math.PI*2,energy:0,stagger:0,mode:0};
   let t,phase;
   if(loop){
     if(p<.06){t=0;phase='Seed';}else if(p<.43){t=(p-.06)/.37;phase='Grow';}else if(p<.57){t=1;phase='Hold';}else if(p<.94){t=1-(p-.57)/.37;phase='Return';}else{t=0;phase='Seed';}

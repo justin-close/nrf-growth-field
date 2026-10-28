@@ -80,3 +80,7 @@ This is a static site. It can be hosted from the repository root on GitHub Pages
 ## Filament finishes
 
 All diagram markers are circular. In **Finish → Filament fade**, choose **Silk** for soft tapered strands or **Veil** for staggered translucent bands, then adjust **Fade strength**. **Off** preserves the original linework. The finish follows the form through animation, saved/shared studies, PNG, transparent SVG, and MP4 exports. Dots remain crisp and independent of the filament fade.
+
+## Orbit loop
+
+Choose **Choreograph → Sequence → Orbit loop · fully grown** to rotate a completed visualization continuously. The **Revolution duration** sets one 360° vertical-axis turn, from 6 to 24 seconds. Preview, scrub, save and share this mode across all seven systems. The sequence can also be selected in **Export → Motion / MP4**. Each export contains one revolution with evenly spaced frames; enable repeat playback in your player or presentation for continuous motion. Growth, return and pulse effects are inactive in this sequence.

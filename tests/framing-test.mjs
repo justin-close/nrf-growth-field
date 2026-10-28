@@ -125,3 +125,10 @@ test('mobile framing reserves the upper title area without clipping lower branch
     }
   }
 });
+
+test('orbit-only sequence fits full revolutions with the growth turntable toggle off',()=>{
+  for(const form of forms)for(const aspect of [.55,2.3])for(const view of ['perspective','front']){
+    const framed=frame({form,sequence:'orbit',turntable:false,spread:100,depth:100},aspect,view);
+    for(let step=0;step<96;step++)assertInside(framed,framed.points,step*Math.PI/48,`${form}, orbit only, ${aspect}, ${view}`);
+  }
+});
