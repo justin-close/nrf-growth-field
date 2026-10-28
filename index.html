@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#121412">
+  <meta name="description" content="An NRF 2027 creative instrument. Explore seven floating growth systems, animate them in 3D, and export images or video.">
+  <title>Growth Field — NRF 2027</title>
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" title="Growth Field home"><svg viewBox="0 0 28 28" aria-hidden="true"><g fill="currentColor"><circle cx="6" cy="6" r="2.4"/><circle cx="14" cy="6" r="2.4"/><circle cx="22" cy="6" r="2.4"/><circle cx="6" cy="14" r="2.4"/><circle cx="14" cy="14" r="2.4"/><circle cx="22" cy="14" r="2.4"/><circle cx="6" cy="22" r="2.4"/><circle cx="14" cy="22" r="2.4"/><circle cx="22" cy="22" r="2.4"/></g></svg><span>NRF <span class="muted">2027</span></span></a>
+    <div class="app-name">Growth Field<span class="version mono">EXPLORATION 002</span></div>
+    <div class="top-actions"><button id="save" class="quiet">Save study <span aria-hidden="true">＋</span></button><button id="share" class="quiet">Share</button><button id="export-open" class="button export-button">Export <span aria-hidden="true">↗</span></button><button id="panel-toggle" class="icon-button" aria-label="Toggle controls" aria-expanded="true" title="Toggle controls (H)">☷</button></div>
+  </header>
+  <main class="workspace">
+    <section class="stage" aria-label="Interactive 3D growth canvas">
+      <div id="viewport" tabindex="0" role="application" aria-label="3D growth field. Drag to orbit, shift drag to pan, scroll to zoom. Arrow keys rotate, plus and minus zoom, F resets the view."></div>
+      <div class="stage-head"><div class="eyebrow mono"><span class="live-dot"></span> TO THE POWER OF POSSIBILITY</div><h1>Small beginnings.<br>Exponential futures<span class="sup-dot">×</span></h1><p id="stage-description">One idea becomes a field of possibility.</p></div>
+      <div class="stage-index mono"><span id="study-number">01</span> / 07 <span class="vertical-line"></span><span id="study-label">EXPONENTIAL GROWTH</span></div>
+      <div class="view-tools" aria-label="Camera controls"><button data-view="perspective" class="active" aria-pressed="true">3D</button><button data-view="front" aria-pressed="false">Front</button><button data-view="top" aria-pressed="false">Top</button><span></span><button id="fit" title="Reset camera (F)" aria-label="Fit form to view">⤢</button><button id="focus" title="Hide interface (H)" aria-label="Focus on artwork">⛶</button></div>
+      <div id="axis-key" class="axis-key mono" aria-hidden="true"><svg viewBox="0 0 60 60"><path d="M30 32V6M30 32L53 45M30 32L7 45"/><text x="27" y="6">Y</text><text x="54" y="50">X</text><text x="0" y="50">Z</text><circle cx="30" cy="32" r="2"/></svg></div>
+      <div class="canvas-bottom"><div class="field-stats mono"><span><strong id="node-count">—</strong> <span id="node-unit">DOTS</span></span><span><strong id="edge-count">—</strong> <span id="edge-unit">CONNECTIONS</span></span><span class="seed-label" id="seed-label">SEED <strong id="seed-readout">0001</strong></span></div><div class="interaction-hint">Drag to orbit <i>·</i> Scroll to zoom <i>·</i> Shift + drag to pan</div></div>
+      <div class="loading" id="loading"><span class="live-dot"></span> Growing a field of possibility…</div>
+      <div class="error-message" id="webgl-error" hidden><h2>This field needs WebGL.</h2><p>Enable hardware acceleration or open this page in a browser that supports WebGL 2.</p></div>
+      <button id="exit-focus" hidden>Show controls <kbd>H</kbd></button>
+    </section>
+    <aside class="inspector" aria-label="Creative controls">
+      <div class="inspector-heading"><span class="mono">YOUR FIELD, YOUR RULES</span><button id="reset" class="text-button">Reset</button></div>
+      <section class="control-section forms-section"><h2><span class="section-number">01</span> Growth system</h2>
+        <div class="form-list">
+          <button class="form-card active" data-form="ascent" aria-pressed="true" title="Compounding into possibility"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M4 29C17 29 28 24 38 4M4 29C17 29 30 28 38 15M4 29C21 29 32 31 38 26"/><circle cx="38" cy="4" r="2"/><circle cx="38" cy="15" r="2"/><circle cx="38" cy="26" r="2"/></svg><span><strong>Exponential growth</strong><small>Compounding into possibility</small></span></button>
+          <button class="form-card" data-form="multiply" aria-pressed="false" title="One becomes many"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M6 17H16M16 17L27 6M16 17L27 28M27 6L37 3M27 6L37 12M27 28L37 23M27 28L37 32"/><circle cx="6" cy="17" r="2"/></svg><span><strong>Multiplicity</strong><small>One becomes many</small></span></button>
+          <button class="form-card" data-form="network" aria-pressed="false" title="Every connection creates more"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M21 3L5 12L11 29L32 29L38 12ZM21 3L32 29L5 12L38 12L11 29Z"/><circle cx="21" cy="3" r="2"/></svg><span><strong>Network effect</strong><small>Every connection creates more</small></span></button>
+          <button class="form-card" data-form="cascading" aria-pressed="false" title="A surface grows into complexity"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M3 25C8 9 12 33 17 17S25 31 29 13S35 25 39 6M4 29C9 20 13 32 18 24S26 31 30 20S36 27 40 16M3 25L4 29M17 17L18 24M29 13L30 20M39 6L40 16"/></svg><span><strong>Cascading folds</strong><small>A surface grows into complexity</small></span></button>
+          <button class="form-card" data-form="radial" aria-pressed="false"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M21 17L4 3M21 17L9 30M21 17L39 26M21 17L37 6M21 17L22 1M21 17L1 17M21 17L30 33"/><circle cx="21" cy="17" r="1.3"/></svg><span><strong>Radial proliferation</strong><small>One origin, many directions</small></span></button>
+          <button class="form-card" data-form="shell" aria-pressed="false"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M3 17C10 14 25 0 35 5M3 17C12 17 37 3 39 17M3 17C12 17 37 31 35 29M3 17C10 20 25 34 35 29"/><circle cx="21" cy="17" r="1.3"/></svg><span><strong>Dissemination shell</strong><small>Many paths, one shared form</small></span></button>
+          <button class="form-card" data-form="bifurcation" aria-pressed="false"><svg viewBox="0 0 42 34" aria-hidden="true"><path d="M3 3C10 4 16 17 21 17S32 3 39 3M3 31C10 30 16 17 21 17S32 31 39 31M3 14C10 14 16 17 21 17S32 14 39 14"/><circle cx="21" cy="17" r="1.3"/></svg><span><strong>Bifurcation field</strong><small>Parallel futures from one point</small></span></button>
+        </div>
+      </section>
+      <section class="control-section"><h2><span class="section-number">02</span> Shape the growth</h2>
+        <div id="generative-controls">
+        <div id="population-controls">
+        <label class="range-label" for="rate"><span>Growth factor <span class="info" title="Dots in generation g = round(factor to the power of g).">ⓘ</span></span><output id="rate-value">2.2×</output></label><input id="rate" type="range" min="1.3" max="3" step="0.1" value="2.2">
+        <label class="range-label" for="generations"><span>Generations</span><output id="generations-value">8</output></label><input id="generations" type="range" min="3" max="10" step="1" value="8">
+        </div>
+        <div id="field-controls" hidden><label class="range-label" for="density"><span>Trajectory density</span><output id="density-value">100</output></label><input id="density" type="range" min="35" max="180" step="5" value="100"></div>
+        <div class="split-controls"><div><label class="range-label" for="spread"><span>Spread</span><output id="spread-value">65</output></label><input id="spread" type="range" min="10" max="100" value="65"></div><div><label class="range-label" for="depth"><span>Depth</span><output id="depth-value">70</output></label><input id="depth" type="range" min="0" max="100" value="70"></div></div>
+        <label class="range-label" for="twist"><span>Twist</span><output id="twist-value">25°</output></label><input id="twist" type="range" min="-180" max="180" value="25">
+        </div>
+        <div id="surface-controls" hidden>
+          <label class="range-label" for="folds"><span>Fold count</span><output id="folds-value">11</output></label><input id="folds" type="range" min="4" max="20" step="1" value="11">
+          <label class="range-label" for="foldAmplitude"><span>Fold amplitude</span><output id="foldAmplitude-value">1.00</output></label><input id="foldAmplitude" type="range" min="0" max="1.8" step="0.01" value="1">
+        </div>
+        <p class="model-note" id="model-note">Synthetic growth · 1 → 549 in 8 generations.</p>
+      </section>
+      <details class="control-section detail-section" open><summary><span class="section-number">03</span> Choreograph <span>＋</span></summary><div class="detail-content">
+        <div class="segmented" id="motion-style-controls" aria-label="Motion style"><button data-motion="cascade" class="active" aria-pressed="true">Cascade</button><button data-motion="unfurl" aria-pressed="false">Unfurl</button><button data-motion="pulse" aria-pressed="false">Pulse</button></div>
+        <p class="model-note" id="motion-description">Staggered arrivals gather into a growing field.</p>
+        <label class="range-label" for="duration"><span>Duration</span><output id="duration-value">12 s</output></label><input id="duration" type="range" min="6" max="24" step="1" value="12">
+        <div class="split-controls" id="motion-detail-controls"><div><label class="range-label" for="energy"><span>Energy</span><output id="energy-value">55%</output></label><input id="energy" type="range" min="0" max="100" value="55"></div><div><label class="range-label" for="stagger"><span>Stagger</span><output id="stagger-value">50%</output></label><input id="stagger" type="range" min="0" max="100" value="50"></div></div>
+        <div class="toggle-row"><label for="loop">Grow &amp; return loop</label><input id="loop" type="checkbox" role="switch"></div>
+        <div class="toggle-row"><label for="turntable">Turntable motion</label><input id="turntable" type="checkbox" role="switch"></div>
+        <button id="preview-motion" class="wide-quiet">Preview from the beginning <span>↗</span></button>
+      </div></details>
+      <section class="control-section palette-section"><h2><span class="section-number">04</span> NRF color stories </h2><div id="palettes" class="palette-grid"></div><div class="palette-caption"><span id="palette-name">Fresh Green / Expanse</span><span class="mono" id="palette-hex">#5AEB41</span></div></section>
+      <details class="control-section detail-section" open><summary><span class="section-number">05</span> Finish <span>＋</span></summary><div class="detail-content"><div class="segmented" aria-label="Drawing style"><button data-style="connected" class="active" aria-pressed="true">Connected</button><button data-style="dots" aria-pressed="false">Dots</button><button data-style="filaments" aria-pressed="false">Filaments</button></div><div class="split-controls"><div><label class="range-label" for="dotSize"><span>Dot size</span><output id="dotSize-value">3.0</output></label><input id="dotSize" type="range" min="1" max="7" value="3" step="0.2"></div><div><label class="range-label" for="lineOpacity"><span>Line opacity</span><output id="lineOpacity-value">35%</output></label><input id="lineOpacity" type="range" min="5" max="90" value="35"></div></div><div class="toggle-row"><label for="autoOrbit">Auto orbit</label><input id="autoOrbit" type="checkbox" role="switch"></div><div id="generative-variation"><button id="reseed" class="wide-quiet">New variation <span>↻</span></button></div></div></details>
+      <details class="control-section detail-section"><summary><span class="section-number">06</span> Saved studies <span id="saved-count">0</span></summary><div id="saved-list" class="detail-content"><p class="empty-state">Save a composition to return to it here.</p></div></details>
+      <div class="inspector-footer mono">A CREATIVE STUDY OF COMPOUNDING.<br>NOT A FORECAST. NO REAL MERCHANT DATA.</div>
+    </aside>
+  </main>
+  <footer class="transport"><button id="play" class="play-button" aria-label="Play growth animation" title="Play / pause growth (Space)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3L17 10L6 17Z"/></svg></button><div class="transport-label"><strong id="motion-phase">Watch it grow</strong><span class="mono" id="progress-label">GENERATION 8.0 / 8</span></div><label for="progress" class="sr-only">Growth progress</label><input id="progress" type="range" min="0" max="1000" value="1000"><span class="growth-readout mono" id="growth-readout">549×</span><button id="restart" class="icon-button" aria-label="Restart growth animation" title="Restart growth">↺</button><div class="transport-end mono">ONE IDEA. INFINITE POTENTIAL.</div></footer>
+  <dialog id="export-dialog"><form method="dialog"><div class="dialog-heading"><div><span class="mono eyebrow">TAKE IT FURTHER</span><h2>Export your field.</h2></div><button id="export-close" class="icon-button" aria-label="Close export dialog">×</button></div>
+    <div class="segmented export-tabs" aria-label="Export format"><button type="button" data-export-tab="video" class="active" aria-pressed="true">Motion / MP4</button><button type="button" data-export-tab="still" aria-pressed="false">Image / PNG + SVG</button></div>
+    <div id="video-options">
+      <p>The complete growth sequence, with your colors and camera. Artwork only.</p>
+      <label class="select-label" for="video-size">Video size <select id="video-size"><option value="1280">1280 px long edge</option><option value="1920" selected>1920 px long edge</option></select></label>
+      <label class="select-label" for="video-ratio">Frame <select id="video-ratio"><option value="current" selected>Current canvas</option><option value="landscape">Landscape · 16:9</option><option value="square">Square · 1:1</option><option value="portrait">Portrait · 9:16</option></select></label>
+      <p class="small-note" id="video-summary"></p><p class="small-note">New aspect ratios fit the artwork while keeping your viewing angle. Set duration, looping, and turntable in Choreograph. Auto orbit is for preview only.</p>
+      <button type="button" id="export-video" class="button full-width">Download MP4 ↗</button>
+      <p id="video-support" class="small-note" role="status"></p>
+    </div>
+    <div id="still-options" hidden>
+      <p>Your current camera, colors, and growth moment. Artwork only.</p>
+      <label class="select-label" for="export-size">Image size <select id="export-size"><option value="1920">1920 px</option><option value="3840" selected>3840 px</option></select></label>
+      <div class="toggle-row"><label for="transparent">Transparent background</label><input type="checkbox" id="transparent" role="switch"></div>
+      <div class="export-options"><button type="button" id="export-png" class="button">Download PNG ↗</button><button type="button" id="export-svg" class="wide-quiet">Download SVG ↗</button></div>
+      <p class="small-note">SVG contains editable projected paths and dots. Images use the current canvas aspect ratio. Transparent images omit the background.</p>
+    </div>
+    <div id="export-progress" hidden><div class="export-progress-heading"><span id="export-status" role="status">Preparing…</span><span id="export-percent" class="mono">0%</span></div><progress id="video-progress" max="1" value="0" aria-label="Video export progress"></progress><button type="button" id="cancel-export" class="wide-quiet">Cancel export</button><p class="small-note">Rendering every frame. Keep this tab open until your download is ready.</p></div>
+  </form></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

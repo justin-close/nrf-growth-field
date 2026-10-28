@@ -1,0 +1,14 @@
+{
+  "name": "nrf-growth-field",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "A 3D creative instrument for exponential growth, multiplicity and network effects.",
+  "scripts": {
+    "test": "node --test tests/*-test.mjs",
+    "start": "python3 -m http.server 8000 --bind 127.0.0.1"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
