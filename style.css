@@ -14,3 +14,5 @@
 
 /* Controls specific to the selected growth system. */
 .inspector [hidden],.field-stats [hidden],.axis-key[hidden]{display:none!important}
+
+.filament-controls{margin-top:22px;padding-top:18px;border-top:1px solid var(--stroke)}.filament-controls>.range-label{display:block;margin-bottom:10px}.filament-controls .small-note{font-size:11px;line-height:1.5;margin:10px 0 16px;min-height:33px}

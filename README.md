@@ -76,3 +76,7 @@ The public edition uses Inter Tight and IBM Plex Mono. Third-party licenses and 
 ## Hosting
 
 This is a static site. It can be hosted from the repository root on GitHub Pages or another static host. The `.nojekyll` file keeps GitHub Pages from processing the application as a Jekyll site.
+
+## Filament finishes
+
+All diagram markers are circular. In **Finish → Filament fade**, choose **Silk** for soft tapered strands or **Veil** for staggered translucent bands, then adjust **Fade strength**. **Off** preserves the original linework. The finish follows the form through animation, saved/shared studies, PNG, transparent SVG, and MP4 exports. Dots remain crisp and independent of the filament fade.

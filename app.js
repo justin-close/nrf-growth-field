@@ -6,6 +6,7 @@ import { checkVideoSupport, exportGrowthVideo } from './video-export.mjs';
 import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
+import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
@@ -19,6 +20,7 @@ const palettes=[
   {name:'Chalk / Vivid Blue',bg:'#1F41FF',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#c4ceff'}
 ];
 const forms={ascent:{number:'01',label:'EXPONENTIAL GROWTH',description:'One idea becomes a field of possibility.'},multiply:{number:'02',label:'MULTIPLICITY',description:'Every beginning holds the potential for many.'},network:{number:'03',label:'NETWORK EFFECT',description:'More connections. More collective possibility.'},cascading:{number:'04',label:'CASCADING FOLDS',description:'A continuous surface. An increasingly complex edge.'},radial:{number:'05',label:'RADIAL PROLIFERATION',description:'One origin. Hundreds of possible directions.'},shell:{number:'06',label:'DISSEMINATION SHELL',description:'Many trajectories accumulate into a shared form.'},bifurcation:{number:'07',label:'BIFURCATION FIELD',description:'A common beginning opens into parallel futures.'}};
+const finishLabels={off:'Even strands, with the original clarity.',silk:'Softly tapered strands gather into a fine, luminous weave.',veil:'Staggered translucent bands create layered, airy texture.'};
 const motionLabels={cascade:'Staggered arrivals gather into a growing field.',unfurl:'A slower opening, with soft landings and flowing connections.',pulse:'Waves of energy travel through an expanding network.'};
 let exporting=false,exportController=null,supportRevision=0,motionFrame,origins=[],pivot;
 let state={...defaults},saved=[],initialView=null,dirty=true,playing=false,lastTime=0,rebuildTimer=0,toastTimer=0;
@@ -71,10 +73,10 @@ function resetView(view='perspective'){
 function disposeGroup(group){const geometries=new Set(),materials=new Set(),textures=new Set();group.traverse(o=>{if(o.geometry)geometries.add(o.geometry);for(const m of (Array.isArray(o.material)?o.material:o.material?[o.material]:[])){materials.add(m);if(m.map)textures.add(m.map);}});geometries.forEach(g=>g.dispose());textures.forEach(t=>t.dispose());materials.forEach(m=>m.dispose());group.clear();}
 function makeMaterial(points){
   const p=palettes[state.palette];
-  return new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uColor:{value:new THREE.Color(p.primary)},uAccent:{value:new THREE.Color(p.secondary)},uClock:{value:0},uPulse:{value:0},uEnergy:{value:state.energy/100},uStagger:{value:state.stagger/100},uMode:{value:0},uSize:{value:state.dotSize},uPixelRatio:{value:renderer.getPixelRatio()},uOpacity:{value:points?1:state.lineOpacity/100}},
+  return new THREE.ShaderMaterial({transparent:true,depthWrite:false,uniforms:{uColor:{value:new THREE.Color(p.primary)},uAccent:{value:new THREE.Color(p.secondary)},uClock:{value:0},uPulse:{value:0},uEnergy:{value:state.energy/100},uStagger:{value:state.stagger/100},uMode:{value:0},uSize:{value:state.dotSize},uPixelRatio:{value:renderer.getPixelRatio()},uOpacity:{value:points?1:state.lineOpacity/100},uFinish:{value:filamentFinishMode(state.filamentFinish)},uFadeStrength:{value:state.fadeStrength/100}},
     vertexShader:`
       attribute vec3 aOrigin; attribute float aGeneration; attribute float aVariation; attribute float aTone;
-      ${points?'':'attribute float aFraction; attribute float aTraceGeneration; attribute float aTraceVariation;'}
+      ${points?'':'attribute float aFraction; attribute float aTraceGeneration; attribute float aTraceVariation; varying float vFraction; varying float vTraceVariation;'}
       varying float vAlpha; varying float vTone;
       uniform float uClock; uniform float uPulse; uniform float uEnergy; uniform float uStagger; uniform float uMode; uniform float uSize; uniform float uPixelRatio;
       void main(){
@@ -93,10 +95,11 @@ function makeMaterial(points){
         vAlpha=${points?'smoothstep(0.0,.16,age)':'smoothstep(0.0,.14,uClock-(generation-1.0+variation*uStagger*.65)-fraction*.72)'};
         vAlpha*=1.0+pulse*.5;
         vTone=clamp(aTone+pulse*.28,0.0,1.0);
+        ${points?'':'vFraction=aFraction; vTraceVariation=aTraceVariation;'}
         vec4 mv=modelViewMatrix*vec4(displaced,1.0); gl_Position=projectionMatrix*mv;
         gl_PointSize=clamp(uSize*(18.0/max(2.0,-mv.z)),1.0,30.0)*uPixelRatio*(1.0+pop*.6*uEnergy+pulse*.16);
       }`,
-    fragmentShader:`uniform vec3 uColor; uniform vec3 uAccent; uniform float uOpacity; varying float vAlpha; varying float vTone; void main(){ ${points?'float d=length(gl_PointCoord-0.5); if(d>.5)discard; float edge=1.0-smoothstep(.34,.5,d);':'float edge=1.0;'} if(vAlpha<.001)discard; gl_FragColor=vec4(mix(uColor,uAccent,vTone),min(1.0,uOpacity*vAlpha*edge));
+    fragmentShader:`${points?'':filamentGLSL+'\nuniform float uFinish; uniform float uFadeStrength; varying float vFraction; varying float vTraceVariation;'} uniform vec3 uColor; uniform vec3 uAccent; uniform float uOpacity; varying float vAlpha; varying float vTone; void main(){ ${points?'float d=length(gl_PointCoord-0.5); if(d>.5)discard; float edge=1.0-smoothstep(.34,.5,d);':'float edge=filamentFade(vFraction,vTraceVariation,uFinish,uFadeStrength);'} if(vAlpha<.001)discard; gl_FragColor=vec4(mix(uColor,uAccent,vTone),min(1.0,uOpacity*vAlpha*edge));
 #include <tonemapping_fragment>
 #include <colorspace_fragment>
  }`});
@@ -183,11 +186,13 @@ function applyFrame(progress){
 function updateProgress(){applyFrame(state.progress);updateReadouts();}
 function rangeFill(el){el.style.setProperty('--fill',`${(el.value-el.min)/(el.max-el.min)*100}%`);}
 function syncUI(){
-  for(const key of ['rate','generations','spread','depth','twist','folds','foldAmplitude','density','dotSize','lineOpacity','duration','energy','stagger']){const el=$(key);el.value=state[key];rangeFill(el);$(`${key}-value`).textContent=key==='rate'?state[key].toFixed(1)+'×':key==='foldAmplitude'?state[key].toFixed(2):key==='twist'?state[key]+'°':['lineOpacity','energy','stagger','density'].includes(key)?state[key]+'%':key==='duration'?state[key]+' s':key==='dotSize'?state[key].toFixed(1):state[key];}
+  for(const key of ['rate','generations','spread','depth','twist','folds','foldAmplitude','density','dotSize','lineOpacity','fadeStrength','duration','energy','stagger']){const el=$(key);el.value=state[key];rangeFill(el);$(`${key}-value`).textContent=key==='rate'?state[key].toFixed(1)+'×':key==='foldAmplitude'?state[key].toFixed(2):key==='twist'?state[key]+'°':['lineOpacity','fadeStrength','energy','stagger','density'].includes(key)?state[key]+'%':key==='duration'?state[key]+' s':key==='dotSize'?state[key].toFixed(1):state[key];}
   for(const key of ['autoOrbit','loop','turntable'])$(key).checked=state[key];
   $$('[data-form]').forEach(b=>{const active=b.dataset.form===state.form;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active);});
   $$('[data-style]').forEach(b=>{const active=b.dataset.style===state.style;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active);});
   $$('[data-motion]').forEach(b=>{const active=b.dataset.motion===state.motion;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active);});
+  $$('[data-finish]').forEach(b=>{const active=b.dataset.finish===state.filamentFinish;b.classList.toggle('active',active);b.setAttribute('aria-pressed',active);});
+  $('filament-controls').hidden=state.style==='dots';$('fade-strength-control').hidden=state.filamentFinish==='off';$('finish-description').textContent=finishLabels[state.filamentFinish];
   $('motion-description').textContent=motionLabels[state.motion];
   const surface=state.form==='cascading',field=isField(state.form);$('surface-controls').hidden=!surface;
   $('population-controls').hidden=field;$('field-controls').hidden=!field;
@@ -201,7 +206,9 @@ function initUI(){
   $$('[data-form]').forEach(b=>b.onclick=()=>{state.form=b.dataset.form;playing=false;state.progress=state.loop?.5:1;syncUI();rebuild();resetView();persist();});
   $$('[data-style]').forEach(b=>b.onclick=()=>{state.style=b.dataset.style;if(fieldArtwork)fieldArtwork.setStyle(state);else if(cascadingArtwork)cascadingArtwork.setStyle(state);else{art.getObjectByName('dots').visible=state.style!=='filaments';art.getObjectByName('lines').visible=state.style!=='dots';}syncUI();updateReadouts();dirty=true;persist();});
   for(const key of ['rate','generations','spread','depth','twist','folds','foldAmplitude','density'])$(key).addEventListener('input',()=>{state[key]=+$(key).value;syncUI();scheduleRebuild();});
-  for(const key of ['dotSize','lineOpacity'])$(key).addEventListener('input',()=>{state[key]=+$(key).value;if(fieldArtwork)fieldArtwork.setStyle(state);else if(cascadingArtwork)cascadingArtwork.setStyle(state);else{dotMaterial.uniforms.uSize.value=state.dotSize;lineMaterial.uniforms.uOpacity.value=state.lineOpacity/100;}syncUI();dirty=true;persist();});
+  const updateFinish=()=>{if(fieldArtwork)fieldArtwork.setStyle(state);else if(cascadingArtwork)cascadingArtwork.setStyle(state);else{dotMaterial.uniforms.uSize.value=state.dotSize;lineMaterial.uniforms.uOpacity.value=state.lineOpacity/100;lineMaterial.uniforms.uFinish.value=filamentFinishMode(state.filamentFinish);lineMaterial.uniforms.uFadeStrength.value=state.fadeStrength/100;}syncUI();dirty=true;persist();};
+  for(const key of ['dotSize','lineOpacity','fadeStrength'])$(key).addEventListener('input',()=>{state[key]=+$(key).value;updateFinish();});
+  $$('[data-finish]').forEach(b=>b.onclick=()=>{state.filamentFinish=b.dataset.finish;updateFinish();});
   $$('[data-motion]').forEach(b=>b.onclick=()=>{state.motion=b.dataset.motion;state.progress=0;playing=true;syncUI();updateProgress();persist();});
   for(const key of ['duration','energy','stagger'])$(key).addEventListener('input',()=>{state[key]=+$(key).value;syncUI();updateProgress();persist();});
   for(const key of ['loop','turntable'])$(key).onchange=()=>{state[key]=$(key).checked;if(key==='loop'&&state.loop&&state.progress>.9)state.progress=.5;updateProgress();if(key==='turntable')resetView();persist();};
@@ -303,31 +310,45 @@ function exportSVG(){
   const project=(pos,inArt=true)=>{v.fromArray(pos);if(inArt)v.applyMatrix4(art.matrixWorld);view.copy(v).applyMatrix4(camera.matrixWorldInverse);v.project(camera);return{x:(v.x*.5+.5)*width,y:(-.5*v.y+.5)*height,z:v.z,d:-view.z};};
   const color=tone=>'#'+new THREE.Color(p.primary).lerp(new THREE.Color(p.secondary),clamp(tone,0,1)).getHexString();
   const description=fieldArtwork?`Procedural filament field. ${model.traces.length} trajectories, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds. Arbitrary units.`:cascadingArtwork?`Parametric surface. ${state.folds} primary folds, amplitude ${state.foldAmplitude}. Continuous growth at ${(state.progress*state.duration).toFixed(2)} seconds. Chart coordinates use arbitrary units.`:`Synthetic creative study. Growth factor ${state.rate}, ${state.generations} generations, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds.`;
-  const number=n=>Number(n.toFixed(2));const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}</desc><defs><clipPath id="frame"><rect width="${width}" height="${height}"/></clipPath></defs>`];
+  const number=n=>Number(n.toFixed(2)),opacity=n=>Number(n.toFixed(4));const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}</desc><defs><clipPath id="frame"><rect width="${width}" height="${height}"/></clipPath></defs>`];
   if(!transparent)pieces.push(`<rect width="${width}" height="${height}" fill="${p.bg}"/>`);pieces.push('<g clip-path="url(#frame)">');
+  let gradientIndex=0;
+  const fadedSegment=(a,b,stroke,width,alphaAt)=>{
+    if(a.z<=-1||a.z>=1||b.z<=-1||b.z>=1)return;
+    const stops=[0,.25,.5,.75,1].map(t=>[t,clamp(alphaAt(t),0,1)]);
+    if(stops.every(([,alpha])=>alpha<.001))return;
+    const path=`M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}`;
+    if(stops.every(([,alpha])=>Math.abs(alpha-stops[0][1])<.0001)){
+      pieces.push(`<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${number(width)}" opacity="${opacity(stops[0][1])}"/>`);return;
+    }
+    const id=`strand-${gradientIndex++}`;
+    pieces.push(`<defs><linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${number(a.x)}" y1="${number(a.y)}" x2="${number(b.x)}" y2="${number(b.y)}">${stops.map(([t,alpha])=>`<stop offset="${t}" stop-color="${stroke}" stop-opacity="${opacity(alpha)}"/>`).join('')}</linearGradient></defs><path d="${path}" fill="none" stroke="url(#${id})" stroke-width="${number(width)}"/>`);
+  };
   if(fieldArtwork){
     const pose=fieldArtwork.snapshot(),visible=q=>q.z>-1&&q.z<1;
     if(state.style!=='dots'){
       pieces.push(`<g fill="none" stroke="${p.primary}" stroke-width="${number(scale*FIELD_LINE_WIDTH)}">`);
       for(let i=0;i<model.segmentCount;i++){
-        const alpha=pose.lineAlpha[i*2];if(alpha<.001)continue;
+        const alpha=pose.lineAlpha[i*2],endAlpha=pose.lineAlpha[i*2+1];if(Math.max(alpha,endAlpha)<.001)continue;
         const a=project(pose.linePositions.subarray(i*6,i*6+3)),b=project(pose.linePositions.subarray(i*6+3,i*6+6));
-        if(visible(a)&&visible(b))pieces.push(`<path d="M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}" opacity="${number(alpha)}"/>`);
+        fadedSegment(a,b,p.primary,scale*FIELD_LINE_WIDTH,t=>alpha+(endAlpha-alpha)*t);
       }pieces.push('</g>');
     }
     if(state.style!=='filaments')for(let i=0;i<model.markCount;i++){
       const alpha=pose.dotAlpha[i];if(alpha<.001)continue;const q=project(pose.dotPositions.subarray(i*3,i*3+3));if(!visible(q))continue;
       const radius=clamp(pose.dotRadius[i]*2*(state.dotSize/3)*18/Math.max(2,q.d),.65,30)*scale*.5;
-      pieces.push(pose.dotSquare[i]?`<rect x="${number(q.x-radius)}" y="${number(q.y-radius)}" width="${number(radius*2)}" height="${number(radius*2)}" fill="${p.primary}" opacity="${number(alpha)}"/>`:`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${p.primary}" opacity="${number(alpha)}"/>`);
+      pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${p.primary}" opacity="${opacity(alpha)}"/>`);
     }
     pieces.push('</g></svg>');download(new Blob(pieces,{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');return;
   }
   if(cascadingArtwork){
     const surface=cascadingArtwork.snapshot(),visible=q=>q.z>-1&&q.z<1;
-    const segment=(a,b,stroke,opacity)=>{if(visible(a)&&visible(b))pieces.push(`<path d="M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}" stroke="${stroke}" opacity="${number(opacity)}"/>`);};
     pieces.push('<g fill="none" stroke-width="1" stroke-linecap="round">');
     const projected=Array.from({length:surface.positions.length/3},(_,i)=>project(surface.positions.subarray(i*3,i*3+3)));
-    if(state.style!=='dots')for(const rim of [false,true])for(const edge of model.edges)if(Boolean(edge.rim)===rim)segment(projected[edge.a],projected[edge.b],p.primary,rim?surface.rimOpacity:surface.meshOpacity);
+    if(state.style!=='dots')for(const rim of [false,true])for(const edge of model.edges)if(Boolean(edge.rim)===rim){
+      const base=rim?surface.rimOpacity:surface.meshOpacity,a=surface.lineFade[edge.a],b=surface.lineFade[edge.b];
+      fadedSegment(projected[edge.a],projected[edge.b],p.primary,1,t=>base*(a+(b-a)*t));
+    }
     pieces.push('</g>');
     if(state.style!=='filaments')for(const index of model.dotIndices){const q=projected[index];if(!visible(q))continue;const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${p.primary}" opacity="${number(surface.dotOpacity)}"/>`);}
     pieces.push('</g></svg>');download(new Blob(pieces,{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');return;
@@ -337,7 +358,13 @@ function exportSVG(){
     for(const {edge,samples} of paths){
       const a=model.points[edge.a],b=model.points[edge.b];
       const projected=samples.map((pos,j)=>{const t=j/(samples.length-1),origin=origins[edge.a].map((v,i)=>v+(origins[edge.b][i]-v)*t);return project(movingPosition(pos,origin,a.g+(b.g-a.g)*t,a.variation+(b.variation-a.variation)*t,frame));});
-      for(let j=1;j<projected.length;j++){const fraction=(j-.5)/(samples.length-1),pulse=pulseAt(edge.g,b.variation,fraction,frame),alpha=traceAlpha(edge.g,b.variation,fraction,frame)*state.lineOpacity/100*(1+pulse*.5);if(alpha<.001)continue;const q=projected[j-1],r=projected[j];if(q.z<-1||q.z>1||r.z<-1||r.z>1)continue;pieces.push(`<path d="M${number(q.x)} ${number(q.y)}L${number(r.x)} ${number(r.y)}" stroke="${color(pulse*.28)}" opacity="${number(Math.min(1,alpha))}"/>`);}
+      for(let j=1;j<projected.length;j++){
+        const fraction=(j-.5)/(samples.length-1),pulse=pulseAt(edge.g,b.variation,fraction,frame);
+        fadedSegment(projected[j-1],projected[j],color(pulse*.28),scale,t=>{
+          const f=(j-1+t)/(samples.length-1);
+          return traceAlpha(edge.g,b.variation,f,frame)*state.lineOpacity/100*(1+pulseAt(edge.g,b.variation,f,frame)*.5)*filamentFade(f,b.variation,state);
+        });
+      }
     }pieces.push('</g>');
   }
   if(state.style!=='filaments'){

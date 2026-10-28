@@ -14,17 +14,17 @@ export function createFieldArtwork(THREE,model,state,palette,pixelRatio=1) {
   const lineAlpha=new THREE.InstancedInterleavedBuffer(pose.lineAlpha,2).setUsage(THREE.DynamicDrawUsage);
   lineGeometry.setAttribute('aStart',new THREE.InterleavedBufferAttribute(linePositions,3,0));
   lineGeometry.setAttribute('aEnd',new THREE.InterleavedBufferAttribute(linePositions,3,3));
-  lineGeometry.setAttribute('aAlpha',new THREE.InterleavedBufferAttribute(lineAlpha,1,0));
+  lineGeometry.setAttribute('aAlphaStart',new THREE.InterleavedBufferAttribute(lineAlpha,1,0));
+  lineGeometry.setAttribute('aAlphaEnd',new THREE.InterleavedBufferAttribute(lineAlpha,1,1));
   dotGeometry.setAttribute('aRadius',new THREE.BufferAttribute(pose.dotRadius,1).setUsage(THREE.DynamicDrawUsage));
-  dotGeometry.setAttribute('aSquare',new THREE.BufferAttribute(pose.dotSquare,1).setUsage(THREE.DynamicDrawUsage));
   const material=points=>new THREE.ShaderMaterial({transparent:true,depthWrite:false,toneMapped:false,
     uniforms:{uColor:{value:new THREE.Color(palette.primary)},uSize:{value:state.dotSize/3},uPixelRatio:{value:pixelRatio}},
-    vertexShader:`attribute float aAlpha; varying float vAlpha; ${points?'attribute float aRadius; attribute float aSquare; varying float vSquare; uniform float uSize; uniform float uPixelRatio;':''}
+    vertexShader:`attribute float aAlpha; varying float vAlpha; ${points?'attribute float aRadius; uniform float uSize; uniform float uPixelRatio;':''}
       void main(){vec4 mv=modelViewMatrix*vec4(position,1.0);gl_Position=projectionMatrix*mv;vAlpha=aAlpha;
-      ${points?'vSquare=aSquare; gl_PointSize=clamp(aRadius*2.0*uSize*(18.0/max(2.0,-mv.z)),.65,30.0)*uPixelRatio;':''}}`,
-    fragmentShader:`uniform vec3 uColor; varying float vAlpha; ${points?'varying float vSquare;':''}
+      ${points?'gl_PointSize=clamp(aRadius*2.0*uSize*(18.0/max(2.0,-mv.z)),.65,30.0)*uPixelRatio;':''}}`,
+    fragmentShader:`uniform vec3 uColor; varying float vAlpha;
       void main(){if(vAlpha<.001)discard;float edge=1.0;
-      ${points?'float d=vSquare>.5?max(abs(gl_PointCoord.x-.5),abs(gl_PointCoord.y-.5)):length(gl_PointCoord-.5);if(d>.5)discard;edge=1.0-smoothstep(.32,.5,d);':''}
+      ${points?'float d=length(gl_PointCoord-.5);if(d>.5)discard;edge=1.0-smoothstep(.32,.5,d);':''}
       gl_FragColor=vec4(uColor,vAlpha*edge);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
@@ -34,13 +34,15 @@ export function createFieldArtwork(THREE,model,state,palette,pixelRatio=1) {
   lineMaterial.uniforms.uResolution={value:new THREE.Vector2(1,1)};
   lineMaterial.uniforms.uWidth={value:FIELD_LINE_WIDTH};
   lineMaterial.uniforms.uNear={value:.1};
-  lineMaterial.vertexShader=`attribute vec3 aStart;attribute vec3 aEnd;attribute float aAlpha;
+  lineMaterial.vertexShader=`attribute vec3 aStart;attribute vec3 aEnd;attribute float aAlphaStart;attribute float aAlphaEnd;
     uniform vec2 uResolution;uniform float uWidth;uniform float uPixelRatio;uniform float uNear;varying float vAlpha;
     void main(){
-      vec4 a=modelViewMatrix*vec4(aStart,1.0),b=modelViewMatrix*vec4(aEnd,1.0);vAlpha=aAlpha;
+      vec4 a=modelViewMatrix*vec4(aStart,1.0),b=modelViewMatrix*vec4(aEnd,1.0);
+      float alphaStart=aAlphaStart,alphaEnd=aAlphaEnd;
       if(a.z>-uNear&&b.z>-uNear){vAlpha=0.0;gl_Position=vec4(0.0);return;}
-      if(a.z>-uNear)a=mix(a,b,(-uNear-a.z)/(b.z-a.z));
-      if(b.z>-uNear)b=mix(b,a,(-uNear-b.z)/(a.z-b.z));
+      if(a.z>-uNear){float clip=(-uNear-a.z)/(b.z-a.z);a=mix(a,b,clip);alphaStart=mix(alphaStart,alphaEnd,clip);}
+      if(b.z>-uNear){float clip=(-uNear-b.z)/(a.z-b.z);b=mix(b,a,clip);alphaEnd=mix(alphaEnd,alphaStart,clip);}
+      vAlpha=mix(alphaStart,alphaEnd,position.y);
       a=projectionMatrix*a;b=projectionMatrix*b;
       vec2 delta=(b.xy/b.w-a.xy/a.w)*uResolution;
       vec2 normal=vec2(-delta.y,delta.x)/max(length(delta),.00001);

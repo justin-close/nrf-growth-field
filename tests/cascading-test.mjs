@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import test from 'node:test';
+import * as THREE from '../vendor/three.module.min.js';
+import { createCascadingArtwork } from '../cascading-scene.mjs';
+import { filamentFade } from '../finish.mjs';
 import {
   buildCascadingModel, updateCascadingModel, sanitizeCascading,
 } from '../cascading.mjs';
@@ -158,4 +161,111 @@ test('control bounds and invalid inputs match the selected study', () => {
   assert.equal(updateCascadingModel(model, {}, 9).growth, 1);
   assert.equal(updateCascadingModel(model, {}, NaN).growth, 1);
   assert.equal(updateCascadingModel(model, {}, Infinity).growth, 1);
+});
+
+const artworkSettings = {
+  foldAmplitude: 1, folds: 11, dotSize: 3, lineOpacity: 35,
+  style: 'connected', filamentFinish: 'off', fadeStrength: 65,
+};
+const artworkPalette = {primary: '#5AEB41'};
+
+test('Cascading finish off preserves line opacity and keeps dots circular and unfaded', () => {
+  const model = buildCascadingModel();
+  const artwork = createCascadingArtwork(THREE, model, artworkSettings, artworkPalette);
+  const mesh = artwork.group.getObjectByName('lines');
+  const rim = artwork.group.getObjectByName('cascading-rim');
+  const dots = artwork.group.getObjectByName('dots');
+  const snapshot = artwork.snapshot();
+  assert(snapshot.lineFade instanceof Float32Array);
+  assert.equal(snapshot.lineFade.length, model.points.length);
+  assert(snapshot.lineFade.every(value => value === 1));
+  close(snapshot.meshOpacity, .42);
+  close(snapshot.rimOpacity, .9625);
+  assert.strictEqual(mesh.geometry.getAttribute('aFilamentFade'), rim.geometry.getAttribute('aFilamentFade'));
+  assert.strictEqual(mesh.geometry.getAttribute('aFilamentFade').array, snapshot.lineFade);
+  assert.equal(dots.geometry.getAttribute('aFilamentFade'), undefined);
+  assert.match(dots.material.fragmentShader, /length\(gl_PointCoord - \.5\)/);
+  assert.doesNotMatch(dots.material.fragmentShader, /FilamentFade/);
+
+  // Exercise the hooks against the bundled Three shader, so a chunk-name
+  // mismatch cannot silently turn the finish into an inactive attribute.
+  for (const material of [mesh.material, rim.material]) {
+    assert.equal(material.isLineBasicMaterial, true);
+    const shader = {
+      vertexShader: THREE.ShaderLib.basic.vertexShader,
+      fragmentShader: THREE.ShaderLib.basic.fragmentShader,
+    };
+    material.onBeforeCompile(shader);
+    assert.match(shader.vertexShader, /attribute float aFilamentFade;/);
+    assert.match(shader.vertexShader, /vFilamentFade = aFilamentFade;/);
+    assert.match(shader.fragmentShader, /diffuseColor\.a \*= vFilamentFade;/);
+    assert(shader.fragmentShader.indexOf('diffuseColor.a *= vFilamentFade;') < shader.fragmentShader.indexOf('#include <alphatest_fragment>'));
+  }
+});
+
+test('Cascading finishes update shared alpha in place without changing geometry or dot appearance', () => {
+  const model = buildCascadingModel();
+  const artwork = createCascadingArtwork(THREE, model, artworkSettings, artworkPalette);
+  const mesh = artwork.group.getObjectByName('lines');
+  const rim = artwork.group.getObjectByName('cascading-rim');
+  const dots = artwork.group.getObjectByName('dots');
+  const vertexAttribute = mesh.geometry.getAttribute('position');
+  const alphaAttribute = mesh.geometry.getAttribute('aFilamentFade');
+  const vertexSnapshot = vertexAttribute.array.slice();
+  const alphaBuffer = artwork.snapshot().lineFade;
+  const geometryIds = artwork.group.children.map(child => child.geometry.uuid);
+  const dotShader = dots.material.fragmentShader;
+  const previousVersion = alphaAttribute.version;
+  artwork.setStyle({...artworkSettings, filamentFinish: 'silk', fadeStrength: 100});
+  assert.strictEqual(artwork.snapshot().lineFade, alphaBuffer);
+  assert(alphaAttribute.version > previousVersion);
+  assert(alphaBuffer.some(value => value < .2));
+  assert(alphaBuffer.some(value => value > .8));
+  assert.deepEqual(vertexAttribute.array, vertexSnapshot);
+  assert.strictEqual(rim.geometry.getAttribute('position'), vertexAttribute);
+  assert.strictEqual(dots.geometry.getAttribute('position'), vertexAttribute);
+  assert.deepEqual(artwork.group.children.map(child => child.geometry.uuid), geometryIds);
+  assert.equal(dots.material.fragmentShader, dotShader);
+  assert.equal(artwork.snapshot().dotOpacity, .82);
+  close(artwork.snapshot().meshOpacity, .42);
+  close(artwork.snapshot().rimOpacity, .9625);
+
+  const fixedFade = alphaBuffer.slice();
+  artwork.update(.35);
+  assert.notDeepEqual(vertexAttribute.array, vertexSnapshot);
+  assert.deepEqual(alphaBuffer, fixedFade, 'finish stays attached to the surface during growth');
+  artwork.setStyle({...artworkSettings, filamentFinish: 'silk', fadeStrength: 0});
+  assert(alphaBuffer.every(value => value === 1));
+  artwork.setStyle({...artworkSettings, filamentFinish: 'veil', fadeStrength: 100, style: 'dots'});
+  assert.equal(mesh.visible, false);
+  assert.equal(rim.visible, false);
+  assert.equal(dots.visible, true);
+  artwork.setStyle({...artworkSettings, style: 'filaments'});
+  assert.equal(mesh.visible, true);
+  assert.equal(rim.visible, true);
+  assert.equal(dots.visible, false);
+  assert(alphaBuffer.every(value => value === 1), 'switching finish off restores the original mesh');
+});
+
+test('each Cascading ring uses the shared cyclic fade profile including the closing segment', () => {
+  const model = buildCascadingModel();
+  const artwork = createCascadingArtwork(THREE, model, artworkSettings, artworkPalette);
+  const {radialCount, angularCount} = model.surface;
+  const samples = new Map();
+  for (const filamentFinish of ['silk', 'veil']) {
+    const settings = {...artworkSettings, filamentFinish, fadeStrength: 100};
+    artwork.setStyle(settings);
+    const {lineFade} = artwork.snapshot();
+    for (const ring of [1, 16, 32]) {
+      const start = 1 + (ring - 1) * angularCount;
+      for (const sector of [0, 96, 192, 383]) {
+        close(lineFade[start + sector], filamentFade(sector / angularCount, ring / radialCount, settings), 3e-8);
+      }
+      close(lineFade[start], filamentFade(1, ring / radialCount, settings), 3e-8);
+      assert(Math.abs(lineFade[start] - lineFade[start + angularCount - 1]) < .05, 'closing segment has no abrupt opacity seam');
+    }
+    assert(lineFade.every(value => Number.isFinite(value) && value >= 0 && value <= 1));
+    samples.set(filamentFinish, lineFade.slice());
+  }
+  assert.notDeepEqual(samples.get('silk'), samples.get('veil'));
 });

@@ -5,8 +5,8 @@ import { buildFieldModel, isField } from './fields.mjs';
 export const MAX_PER_GENERATION = 1500;
 export const TAU = Math.PI * 2;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-export const defaults = { form:'ascent', rate:2.2, generations:8, spread:65, depth:70, twist:25, folds:11, foldAmplitude:1,density:100, palette:0, style:'connected', dotSize:3, lineOpacity:35, autoOrbit:false, progress:1, seed:1, ...motionDefaults };
-export const bounds = {rate:[1.3,3],generations:[3,10],spread:[10,100],depth:[0,100],twist:[-180,180],folds:[4,20],foldAmplitude:[0,1.8],density:[35,180],palette:[0,6],dotSize:[1,7],lineOpacity:[5,90],progress:[0,1],seed:[1,999999]};
+export const defaults = { form:'ascent', rate:2.2, generations:8, spread:65, depth:70, twist:25, folds:11, foldAmplitude:1,density:100, palette:0, style:'connected', dotSize:3, lineOpacity:35, filamentFinish:'off', fadeStrength:65, autoOrbit:false, progress:1, seed:1, ...motionDefaults };
+export const bounds = {rate:[1.3,3],generations:[3,10],spread:[10,100],depth:[0,100],twist:[-180,180],folds:[4,20],foldAmplitude:[0,1.8],density:[35,180],palette:[0,6],dotSize:[1,7],lineOpacity:[5,90],fadeStrength:[0,100],progress:[0,1],seed:[1,999999]};
 export function sanitize(input={}) {
   const s={...defaults,...sanitizeMotion(input)};
   for(const [k,[lo,hi]] of Object.entries(bounds)) if(typeof input[k]==='number'&&Number.isFinite(input[k])) s[k]=clamp(input[k],lo,hi);
@@ -14,6 +14,7 @@ export function sanitize(input={}) {
   for(const k of ['autoOrbit']) if(typeof input[k]==='boolean') s[k]=input[k];
   if(['ascent','multiply','network','cascading','radial','shell','bifurcation'].includes(input.form)) s.form=input.form;
   if(['connected','dots','filaments'].includes(input.style)) s.style=input.style;
+  if(['off','silk','veil'].includes(input.filamentFinish)) s.filamentFinish=input.filamentFinish;
   return s;
 }
 export function random(seed){let a=seed|0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}

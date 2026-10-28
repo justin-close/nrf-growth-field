@@ -7,15 +7,16 @@ import * as THREE from '../vendor/three.module.min.js';
 import { defaults, sanitize, buildModel } from '../model.mjs';
 import { FIELD_FORMS, isField, buildFieldModel, pointOnTrace, createFieldPose, updateFieldPose } from '../fields.mjs';
 import { createFieldArtwork } from '../fields-scene.mjs';
+import { filamentFade } from '../finish.mjs';
 import { timelineAt } from '../motion.mjs';
 
 const forms = ['radial', 'shell', 'bifurcation'];
 const modes = ['cascade', 'unfurl', 'pulse'];
 const counts = {radial:560, shell:620, bifurcation:720};
-const arrayFields = ['linePositions', 'lineAlpha', 'dotPositions', 'dotAlpha', 'dotRadius', 'dotSquare'];
+const arrayFields = ['linePositions', 'lineAlpha', 'dotPositions', 'dotAlpha', 'dotRadius'];
 const settings = overrides => sanitize({...defaults, ...overrides});
 const close = (a, b, label, tolerance=1e-6) => assert(Math.abs(a-b) <= tolerance, `${label}: ${a} != ${b}`);
-const positionClose = (actual, expected, label) => expected.forEach((n, k) => close(actual[k], n, `${label}[${k}]`));
+const positionClose = (actual, expected, label, tolerance=1e-6) => expected.forEach((n, k) => close(actual[k], n, `${label}[${k}]`, tolerance));
 const boundsOf = points => {
   const min=[Infinity,Infinity,Infinity],max=[-Infinity,-Infinity,-Infinity];
   for(const p of points)for(let k=0;k<3;k++){min[k]=Math.min(min[k],p[k]);max[k]=Math.max(max[k],p[k]);}
@@ -87,6 +88,25 @@ test('trace interpolation clamps its ends and follows individual segments', () =
   assert.deepEqual(pointOnTrace(points,3),points[2]);
 });
 
+test('radial subdivision preserves the approved bend and exact marker positions under twist', () => {
+  const model=buildModel(settings({form:'radial',seed:147,density:35,twist:143,depth:89,spread:83}));
+  const tr=model.traces[7];
+  // Captured from the original two-segment study before subdivision.
+  const original=[[0,0,0],[-.8163048980021593,1.5030566280723234,.15016281504792423],[-1.6326097960043187,1.9347968679220822,-2.49070907692413]];
+  const marks=[[-1.6326097960043187,1.9347968679220822,-2.49070907692413],[-1.352531908553785,1.7866648469083026,-1.584614035302721],[-.6930938942664406,1.2761890492183179,.12749761824325323],[-1.1112637938464207,1.6590591520670828,-.8040745774124625]];
+  assert.equal(tr.points.length,33);assert.equal(model.segmentCount,model.traces.length*32);
+  for(let i=0;i<=32;i++)positionClose(tr.points[i],pointOnTrace(original,i/32),`subdivided point ${i}`,1e-12);
+  assert.deepEqual(tr.marks.map(mark=>mark.pos),marks);
+});
+
+test('all field marks use one circular-dot contract', () => {
+  for(const form of forms){
+    const model=buildModel(settings({form,density:35})),pose=createFieldPose(model);
+    assert.equal(Object.hasOwn(pose,'dotSquare'),false);
+    for(const tr of model.traces)for(const mark of tr.marks)assert.equal(Object.hasOwn(mark,'square'),false);
+  }
+});
+
 test('every motion starts with only the source visible', () => {
   for(const form of forms)for(const motion of modes)for(const stagger of [0,50,100]){
     const s=settings({form,motion,stagger,density:35,energy:100}),model=buildModel(s);
@@ -132,13 +152,65 @@ test('random scrubbing and pose reuse match a fresh export frame exactly', () =>
   }
 });
 
-test('loop seams match in positions, alpha, dot shape and counts', () => {
+test('loop seams match in positions, alpha, dot radius and counts', () => {
   for(const form of forms)for(const motion of modes)for(const duration of [6,7.5,12,24]){
     const s=settings({form,motion,duration,loop:true,turntable:true,density:35,stagger:100,energy:100}),model=buildModel(s);
     const first=timelineAt(0,s),last=timelineAt(1,s);
     assertPoseEqual(updateFieldPose(model,s,first),updateFieldPose(model,s,last),`${form}/${motion}/${duration}`);
     close(Math.sin(first.turn),Math.sin(last.turn),'loop camera yaw closes');
     close(Math.cos(first.turn),Math.cos(last.turn),'loop camera yaw closes');
+  }
+});
+
+test('filament finishes preserve geometry and dots while fading both endpoints independently', () => {
+  for(const form of forms){
+    const base=settings({form,density:35,motion:'pulse',energy:100,stagger:50,filamentFinish:'off'}),model=buildModel(base);
+    for(const progress of [.1,.47,1]){
+      const frame=timelineAt(progress,base),original=updateFieldPose(model,base,frame);
+      for(const filamentFinish of ['silk','veil']){
+        const state={...base,filamentFinish,fadeStrength:100},pose=updateFieldPose(model,state,frame);
+        for(const key of ['linePositions','dotPositions','dotAlpha','dotRadius'])assert.deepEqual(pose[key],original[key],`${form}/${filamentFinish}: ${key} unchanged`);
+        assert.equal(pose.activeTraces,original.activeTraces);assert.equal(pose.activeMarks,original.activeMarks);
+        assert(pose.lineAlpha.every((n,i)=>n>=0&&n<=original.lineAlpha[i]+1e-7));
+        assert(pose.lineAlpha.some((n,i)=>n<original.lineAlpha[i]-1e-5),`${form}/${filamentFinish}: visible fade`);
+        assert(pose.lineAlpha.some((n,i)=>i%2===0&&Math.abs(n-pose.lineAlpha[i+1])>1e-6),`${form}/${filamentFinish}: endpoint gradients`);
+        assertPoseEqual(updateFieldPose(model,{...state,fadeStrength:0},frame),original,`${form}/${filamentFinish}: zero strength is identity`);
+      }
+    }
+  }
+});
+
+test('a growing segment evaluates its fade at the actual moving tip', () => {
+  for(const form of forms){
+    const base=settings({form,density:35,motion:'pulse',filamentFinish:'off'}),model=buildModel(base);
+    const frame={growth:.1,energy:0,stagger:.5,mode:2,pulse:0},original=updateFieldPose(model,base,frame);
+    const tr=model.traces[0],steps=tr.points.length-1;
+    const active=Array.from({length:steps},(_,i)=>i).filter(i=>original.lineAlpha[i*2]>0),i=active.at(-1);
+    assert.notEqual(i,undefined);
+    const a=tr.points[i],b=tr.points[i+1],tip=Array.from(original.linePositions.slice(i*6+3,i*6+6));
+    const axis=[0,1,2].sort((k,l)=>Math.abs(b[l]-a[l])-Math.abs(b[k]-a[k]))[0];
+    const fraction=(tip[axis]-a[axis])/(b[axis]-a[axis]),end=(i+fraction)/steps;
+    assert(fraction>0&&fraction<1,`${form}: partially drawn terminal segment`);
+    for(const filamentFinish of ['silk','veil']){
+      const state={...base,filamentFinish,fadeStrength:100},pose=updateFieldPose(model,state,frame);
+      close(pose.lineAlpha[i*2],original.lineAlpha[i*2]*filamentFade(i/steps,tr.variation,state),`${form}/${filamentFinish}: start fade`);
+      close(pose.lineAlpha[i*2+1],original.lineAlpha[i*2+1]*filamentFade(end,tr.variation,state),`${form}/${filamentFinish}: moving tip fade`);
+    }
+  }
+});
+
+test('finished fields scrub reversibly and share the same pose with scene and export', () => {
+  for(const form of forms)for(const filamentFinish of ['silk','veil']){
+    const state=settings({form,density:35,motion:'pulse',filamentFinish,fadeStrength:83,loop:true,energy:100,stagger:100}),model=buildModel(state);
+    const art=createFieldArtwork(THREE,model,state,{primary:'#5AEB41'}),reused=createFieldPose(model);
+    for(const progress of [0,.18,.5,.76,.99,.5,.31,.76,1]){
+      const frame=timelineAt(progress,state),fresh=updateFieldPose(model,state,frame);
+      updateFieldPose(model,state,frame,reused);art.update(frame);
+      assertPoseEqual(reused,fresh,`${form}/${filamentFinish}/${progress}: scrub/export parity`);
+      assertPoseEqual(art.snapshot(),fresh,`${form}/${filamentFinish}/${progress}: scene/export parity`);
+    }
+    assertPoseEqual(updateFieldPose(model,state,timelineAt(0,state)),updateFieldPose(model,state,timelineAt(1,state)),`${form}/${filamentFinish}: loop seam`);
+    for(const object of art.group.children){object.geometry.dispose();object.material.dispose();}
   }
 });
 
@@ -170,13 +242,26 @@ test('scene styles, palette and export pixel ratio update the shared pose withou
     assertPoseEqual(art.snapshot(),updateFieldPose(model,state,frame),`${form}: scene/export parity`);
     assert.equal(lines.geometry.getAttribute('aStart').data.array,art.snapshot().linePositions);
     assert.equal(lines.geometry.getAttribute('aEnd').data.array,art.snapshot().linePositions);
+    const alphaStart=lines.geometry.getAttribute('aAlphaStart'),alphaEnd=lines.geometry.getAttribute('aAlphaEnd');
+    assert.equal(alphaStart.data.array,art.snapshot().lineAlpha);assert.equal(alphaEnd.data.array,art.snapshot().lineAlpha);
+    assert.equal(alphaStart.offset,0);assert.equal(alphaEnd.offset,1);
     assert.equal(dots.geometry.getAttribute('position').array,art.snapshot().dotPositions);
+    assert.equal(dots.geometry.getAttribute('aSquare'),undefined);
     for(const style of ['connected','dots','filaments']){
       const next={...state,style,dotSize:7};art.setStyle(next);
       assert.equal(lines.visible,style!=='dots');assert.equal(dots.visible,style!=='filaments');
       assert.equal(lines.geometry,lineGeometry);assert.equal(dots.geometry,dotGeometry);
       close(dots.material.uniforms.uSize.value,7/3,`${form}: dot-size update`);
       assertPoseEqual(art.snapshot(),updateFieldPose(model,next,frame),`${form}: restyled export parity`);
+    }
+    for(const filamentFinish of ['silk','veil','off']){
+      const next={...state,filamentFinish,fadeStrength:100};art.setStyle(next);
+      assert.equal(lines.geometry,lineGeometry);assert.equal(dots.geometry,dotGeometry);
+      assertPoseEqual(art.snapshot(),updateFieldPose(model,next,frame),`${form}/${filamentFinish}: finish/export parity`);
+      for(let i=0;i<model.segmentCount;i++){
+        assert.equal(alphaStart.getX(i),art.snapshot().lineAlpha[i*2]);
+        assert.equal(alphaEnd.getX(i),art.snapshot().lineAlpha[i*2+1]);
+      }
     }
     art.setPalette({primary:'#1F41FF'});assert.equal(lines.material.uniforms.uColor.value.getHexString(),'1f41ff');assert.equal(dots.material.uniforms.uColor.value.getHexString(),'1f41ff');
     art.setPixelRatio(2);assert.equal(dots.material.uniforms.uPixelRatio.value,2);assert.equal(lines.material.uniforms.uPixelRatio.value,2);

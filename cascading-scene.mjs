@@ -1,4 +1,5 @@
 import { updateCascadingModel } from './cascading.mjs';
+import { filamentFade } from './finish.mjs';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -11,14 +12,30 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
   let frame = updateCascadingModel(model, settings, 1);
   const positions = new THREE.BufferAttribute(frame.positions, 3);
   positions.setUsage(THREE.DynamicDrawUsage);
+  const lineFade = new Float32Array(model.points.length);
+  const fadeAttribute = new THREE.BufferAttribute(lineFade, 1);
+  fadeAttribute.setUsage(THREE.DynamicDrawUsage);
   const meshIndices = [], rimIndices = [];
   for (const edge of model.edges) (edge.rim ? rimIndices : meshIndices).push(edge.a, edge.b);
 
-  const geometryFor = indices => {
+  const geometryFor = (indices, withFade = false) => {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', positions);
+    if (withFade) geometry.setAttribute('aFilamentFade', fadeAttribute);
     geometry.setIndex(indices);
     return geometry;
+  };
+  const applyFade = material => {
+    // Keep Three's standard line color, transparency and color-space handling.
+    // A fixed shader supports every finish; changing controls only uploads
+    // vertex alpha values and does not rebuild the surface or its program.
+    material.onBeforeCompile = shader => {
+      shader.vertexShader = 'attribute float aFilamentFade;\nvarying float vFilamentFade;\n' + shader.vertexShader;
+      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFilamentFade = aFilamentFade;');
+      shader.fragmentShader = 'varying float vFilamentFade;\n' + shader.fragmentShader;
+      shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vFilamentFade;');
+    };
+    material.customProgramCacheKey = () => 'nrf-cascading-filament-fade-v1';
   };
   const meshMaterial = new THREE.LineBasicMaterial({
     color: palette.primary, transparent: true, opacity: .42,
@@ -28,10 +45,12 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
     color: palette.primary, transparent: true, opacity: .96,
     depthWrite: false, toneMapped: false
   });
-  const mesh = new THREE.LineSegments(geometryFor(meshIndices), meshMaterial);
+  applyFade(meshMaterial);
+  applyFade(rimMaterial);
+  const mesh = new THREE.LineSegments(geometryFor(meshIndices, true), meshMaterial);
   mesh.name = 'lines';
   mesh.frustumCulled = false;
-  const rim = new THREE.LineSegments(geometryFor(rimIndices), rimMaterial);
+  const rim = new THREE.LineSegments(geometryFor(rimIndices, true), rimMaterial);
   rim.name = 'cascading-rim';
   rim.frustumCulled = false;
   rim.renderOrder = 1;
@@ -73,6 +92,14 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
 
   function setStyle(next) {
     settings = next;
+    lineFade[0] = filamentFade(0, 0, next);
+    const { radialCount, angularCount } = model.surface;
+    for (let ring = 1; ring <= radialCount; ring++) {
+      for (let sector = 0; sector < angularCount; sector++) {
+        lineFade[1 + (ring - 1) * angularCount + sector] = filamentFade(sector / angularCount, ring / radialCount, next);
+      }
+    }
+    fadeAttribute.needsUpdate = true;
     const opacity = clamp(Number(next.lineOpacity) / 100, 0, 1);
     meshMaterial.opacity = clamp(opacity * 1.2, 0, 1);
     rimMaterial.opacity = clamp(opacity * 2.75, 0, 1);
@@ -102,6 +129,7 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
     snapshot() {
       return {
         positions: frame.positions, rimRatio: frame.rimRatio, growth: frame.growth,
+        lineFade,
         meshOpacity: meshMaterial.opacity, rimOpacity: rimMaterial.opacity,
         dotOpacity: dotMaterial.uniforms.uOpacity.value, dotScale: 1
       };
