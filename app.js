@@ -21,7 +21,7 @@ const palettes=[
   {name:'Fresh Green / Fir',bg:'#173B2B',primary:'#5AEB41',secondary:'#F6F5EF',text:'#F6F5EF',muted:'#b0cbb7'},
   {name:'Chalk / Reflex Blue',bg:'#000F82',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#b5c5e4'},
   {name:'Expanse / Fresh Green',bg:'#5AEB41',primary:'#121412',secondary:'#173B2B',text:'#121412',muted:'#244f1c'},
-  {name:'Expanse / Vivid Blue',bg:'#59FFFF',primary:'#121412',secondary:'#000F82',text:'#121412',muted:'#244f50'}
+  {name:'Reflex Blue / Chalk',bg:'#F6F5EF',primary:'#000F82',secondary:'#000F82',text:'#121412',muted:'#5c6257'}
 ];
 const forms={ascent:{number:'01',label:'EXPONENTIAL GROWTH'},multiply:{number:'02',label:'MULTIPLICITY'},network:{number:'03',label:'NETWORK EFFECT'},cascading:{number:'04',label:'CASCADING FOLDS'},radial:{number:'05',label:'RADIAL PROLIFERATION'},shell:{number:'06',label:'DISSEMINATION SHELL'},bifurcation:{number:'07',label:'BIFURCATION FIELD'}};
 const finishLabels={off:'Even strands, with the original clarity.',silk:'Softly tapered strands gather into a fine, luminous weave.',veil:'Staggered translucent bands create layered, airy texture.'};
