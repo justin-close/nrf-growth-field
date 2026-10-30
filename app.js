@@ -20,7 +20,7 @@ const palettes=[
   {name:'Expanse / Fresh Green',bg:'#5AEB41',primary:'#121412',secondary:'#173B2B',text:'#121412',muted:'#244f1c'},
   {name:'Chalk / Vivid Blue',bg:'#1F41FF',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#c4ceff'}
 ];
-const forms={ascent:{number:'01',label:'EXPONENTIAL GROWTH',description:'One idea becomes a field of possibility.'},multiply:{number:'02',label:'MULTIPLICITY',description:'Every beginning holds the potential for many.'},network:{number:'03',label:'NETWORK EFFECT',description:'More connections. More collective possibility.'},cascading:{number:'04',label:'CASCADING FOLDS',description:'A continuous surface. An increasingly complex edge.'},radial:{number:'05',label:'RADIAL PROLIFERATION',description:'One origin. Hundreds of possible directions.'},shell:{number:'06',label:'DISSEMINATION SHELL',description:'Many trajectories accumulate into a shared form.'},bifurcation:{number:'07',label:'BIFURCATION FIELD',description:'A common beginning opens into parallel futures.'}};
+const forms={ascent:{number:'01',label:'EXPONENTIAL GROWTH'},multiply:{number:'02',label:'MULTIPLICITY'},network:{number:'03',label:'NETWORK EFFECT'},cascading:{number:'04',label:'CASCADING FOLDS'},radial:{number:'05',label:'RADIAL PROLIFERATION'},shell:{number:'06',label:'DISSEMINATION SHELL'},bifurcation:{number:'07',label:'BIFURCATION FIELD'}};
 const finishLabels={off:'Even strands, with the original clarity.',silk:'Softly tapered strands gather into a fine, luminous weave.',veil:'Staggered translucent bands create layered, airy texture.'};
 const motionLabels={cascade:'Staggered arrivals gather into a growing field.',unfurl:'A slower opening, with soft landings and flowing connections.',pulse:'Waves of energy travel through an expanding network.'};
 let exporting=false,exportController=null,supportRevision=0,motionFrame,origins=[],pivot;
@@ -207,7 +207,7 @@ function syncUI(){
   for(const id of ['generative-controls','motion-style-controls','motion-description','motion-detail-controls','generative-variation','seed-label'])$(id).hidden=surface;
   $('node-unit').textContent=surface?'MESH DOTS':'DOTS';$('edge-unit').textContent=surface?'SEGMENTS':field?'TRAJECTORIES':'CONNECTIONS';$('axis-key').hidden=surface||field;
   syncSequenceUI();
-  const f=forms[state.form];$('study-number').textContent=f.number;$('study-label').textContent=f.label;$('stage-description').textContent=f.description;updatePlayButton();
+  const f=forms[state.form];$('study-number').textContent=f.number;$('study-label').textContent=f.label;updatePlayButton();
 }
 function syncSequenceUI(){
   const orbit=state.sequence==='orbit',surface=state.form==='cascading';
