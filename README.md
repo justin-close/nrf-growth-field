@@ -87,11 +87,13 @@ Choose **Choreograph → Sequence → Orbit loop · fully grown** to rotate a co
 
 ## Print artwork
 
-Use **Export → Print** for physical artwork. Enter trim width/height in inches
-or millimetres and bleed per side. Business card, poster and banner presets are
-starting points, not printer specifications. The current moment is fitted to
-the new trim aspect ratio while retaining the viewing angle. Bleed extends the
-background; artwork is kept inside trim, with no crop marks.
+Use **Export → Print** for physical artwork. Enter maximum width and height in
+inches or millimetres. The export keeps the current growth moment and viewing
+angle, crops to visible paths and dots (including their thickness), and adds a
+3% margin on each side. It fits proportionally within those maximum dimensions;
+the preview reports the actual physical size and pixel dimensions. There are no
+format presets, bleed fields or extra canvas area. Background color and
+transparency both use the same close crop.
 
 Print SVG is a projected, editable vector master with physical dimensions,
 round line caps, circular dot shapes and continuous vector transparency gradients.
@@ -104,13 +106,12 @@ choose an appropriate resolution in the final print workflow.
 Optional reinforcement imposes minimum line width and dot diameter in points at
 the specified physical size, plus an opacity floor on visible marks. It applies
 to every system and to both print formats, preserving absent geometry. It can
-make the fade less delicate. Presets start at 0.35 pt / 1 pt for cards, 0.5 pt /
-1.5 pt for posters, and 1.5 pt / 4 pt for banners. Adjust for material, press,
+make the fade less delicate. Adjust weights for material, press,
 contrast and viewing distance. Placing the result at a different size scales the
 weights too. Dense overlaps can merge at small sizes: reduce trajectory density
 or generations and proof rather than assuming resolution alone prevents it.
 
-Print PNG rasterizes the same vector master at **300 PPI**, including bleed,
+Print PNG rasterizes the same vector master at **300 PPI** at the reported cropped size,
 and embeds PNG pHYs metadata (11811 pixels/metre, approximately 300 PPI) plus an
 sRGB declaration. It does not upscale a screen capture. Browser exports are
 limited to 64 megapixels and 16,384 pixels per edge; larger artwork remains

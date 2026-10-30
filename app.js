@@ -7,7 +7,7 @@ import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
 import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
-import { printPresets, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs';
+import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
@@ -255,10 +255,9 @@ function initUI(){
   $('export-video').onclick=exportVideo;$('cancel-export').onclick=()=>exportController?.abort();
   for(const key of ['video-size','video-ratio'])$(key).onchange=updateVideoOptions;
   $$('[data-export-tab]').forEach(b=>b.onclick=()=>{for(const name of ['video','still','print'])$(name+'-options').hidden=b.dataset.exportTab!==name;$$('[data-export-tab]').forEach(tab=>{const active=tab===b;tab.classList.toggle('active',active);tab.setAttribute('aria-pressed',active);});if(b.dataset.exportTab==='print')updatePrintOptions();});
-  $('print-preset').onchange=()=>{const preset=printPresets[$('print-preset').value];if(preset){const factor=$('print-unit').value==='mm'?25.4:1;for(const key of ['width','height','bleed'])$('print-'+key).value=Number((preset[key]*factor).toFixed(4));$('print-line').value=preset.line;$('print-dot').value=preset.dot;}updatePrintOptions();};
   let printUnit='in',printTimer;
-  $('print-unit').onchange=()=>{const next=$('print-unit').value,factor=next===printUnit?1:next==='mm'?25.4:1/25.4;for(const key of ['width','height','bleed']){const input=$('print-'+key);if(input.value!=='')input.value=Number((Number(input.value)*factor).toFixed(6));}printUnit=next;updatePrintOptions();};
-  for(const key of ['width','height','bleed','line','dot','opacity','reinforce','transparent'])$('print-'+key).addEventListener('input',()=>{if(['width','height','bleed'].includes(key))$('print-preset').value='custom';clearTimeout(printTimer);printTimer=setTimeout(updatePrintOptions,350);});
+  $('print-unit').onchange=()=>{const next=$('print-unit').value,factor=next===printUnit?1:next==='mm'?25.4:1/25.4;for(const key of ['width','height']){const input=$('print-'+key);if(input.value!=='')input.value=Number((Number(input.value)*factor).toFixed(6));}printUnit=next;updatePrintOptions();};
+  for(const key of ['width','height','line','dot','opacity','reinforce','transparent'])$('print-'+key).addEventListener('input',()=>{clearTimeout(printTimer);printTimer=setTimeout(updatePrintOptions,350);});
   $('export-print-svg').onclick=()=>exportPrint('svg');$('export-print-png').onclick=()=>exportPrint('png');
   $('export-dialog').addEventListener('cancel',e=>{if(exporting){e.preventDefault();exportController?.abort();}});
   $('export-dialog').addEventListener('submit',e=>{if(exporting)e.preventDefault();});
@@ -342,22 +341,25 @@ function exportSVG(){
   const width=+$('export-size').value,height=Math.round(width/camera.aspect);
   download(new Blob([buildSVG({width,height,transparent:$('transparent').checked})],{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');
 }
-function buildSVG({width,height,transparent=false,print=null}){
-  const p=palettes[state.palette],scale=width/renderer.getSize(new THREE.Vector2()).x,frame=motionFrame,unitsPerInch=print?width/print.width:0;
+function buildSVG({width,height,transparent=false,print=null,crop=null,bounds=null}){
+  const p=palettes[state.palette],scale=width/renderer.getSize(new THREE.Vector2()).x,frame=motionFrame,unitsPerInch=print?(crop?.width||width)/print.width:0;
   camera.updateMatrixWorld();art.updateMatrixWorld();const v=new THREE.Vector3(),view=new THREE.Vector3();
   const project=(pos,inArt=true)=>{v.fromArray(pos);if(inArt)v.applyMatrix4(art.matrixWorld);view.copy(v).applyMatrix4(camera.matrixWorldInverse);v.project(camera);return{x:(v.x*.5+.5)*width,y:(-.5*v.y+.5)*height,z:v.z,d:-view.z};};
   const color=tone=>'#'+new THREE.Color(p.primary).lerp(new THREE.Color(p.secondary),clamp(tone,0,1)).getHexString();
   const description=fieldArtwork?`Procedural filament field. ${model.traces.length} trajectories, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds. Arbitrary units.`:cascadingArtwork?`Parametric surface. ${state.folds} primary folds, amplitude ${state.foldAmplitude}. Continuous growth at ${(state.progress*state.duration).toFixed(2)} seconds. Chart coordinates use arbitrary units.`:`Synthetic creative study. Growth factor ${state.rate}, ${state.generations} generations, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds.`;
-  const number=n=>Number(n.toFixed(print?5:2)),opacity=n=>Number(printAlpha(n,print).toFixed(4)),dotRadius=n=>number(printRadius(n,print,unitsPerInch)),physical=svgPhysicalFrame(width,height,print);
-  const printDescription=print?` Print artwork: trim ${print.width} × ${print.height} in; bleed ${print.bleed} in per side; RGB/sRGB colors. ${print.reinforce?`Minimum line ${print.line} pt; minimum dot diameter ${print.dot} pt; opacity floor ${print.opacity*100}%.`:'Original detail weights.'} Raster target 300 PPI.`:'';
-  const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" ${physical.attributes}><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}${printDescription}</desc><defs><clipPath id="frame"><rect width="${width}" height="${height}"/></clipPath></defs>`];
-  if(!transparent)pieces.push(`<rect width="${physical.width}" height="${physical.height}" fill="${p.bg}"/>`);pieces.push(`<g stroke-linecap="round" transform="translate(${physical.inset} ${physical.inset})"><g clip-path="url(#frame)">`);
+  const number=n=>Number(n.toFixed(print?5:2)),opacity=n=>Number(printAlpha(n,print).toFixed(4)),dotRadius=n=>number(printRadius(n,print,unitsPerInch)),physical=svgPhysicalFrame(width,height,print,crop);
+  const include=(q,r=0)=>{if(!bounds)return;bounds.minX=Math.min(bounds.minX,q.x-r);bounds.minY=Math.min(bounds.minY,q.y-r);bounds.maxX=Math.max(bounds.maxX,q.x+r);bounds.maxY=Math.max(bounds.maxY,q.y+r);};
+  const circle=(q,r,fill,alpha)=>{if(alpha<.001)return;r=dotRadius(r);include(q,r);pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${r}" fill="${fill}" opacity="${opacity(alpha)}"/>`);};
+  const printDescription=print?` Print artwork: ${print.width} × ${print.height} in; close artwork crop with 3% margin per side; RGB/sRGB colors. ${print.reinforce?`Minimum line ${print.line} pt; minimum dot diameter ${print.dot} pt; opacity floor ${print.opacity*100}%.`:'Original detail weights.'} Raster target 300 PPI.`:'';
+  const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" ${physical.attributes}><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}${printDescription}</desc><defs><clipPath id="frame"><rect x="${physical.x}" y="${physical.y}" width="${physical.width}" height="${physical.height}"/></clipPath></defs>`];
+  if(!transparent)pieces.push(`<rect x="${physical.x}" y="${physical.y}" width="${physical.width}" height="${physical.height}" fill="${p.bg}"/>`);pieces.push(`<g stroke-linecap="round"><g clip-path="url(#frame)">`);
   let gradientIndex=0;
   const fadedSegment=(a,b,stroke,width,alphaAt)=>{
     if(a.z<=-1||a.z>=1||b.z<=-1||b.z>=1)return;
     const stops=[0,.25,.5,.75,1].map(t=>[t,clamp(alphaAt(t),0,1)]);
     width=printStroke(width,print,unitsPerInch);
     if(stops.every(([,alpha])=>alpha<.001))return;
+    include(a,width/2);include(b,width/2);
     const path=`M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}`;
     if(stops.every(([,alpha])=>Math.abs(alpha-stops[0][1])<.0001)){
       pieces.push(`<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${number(width)}" opacity="${opacity(stops[0][1])}"/>`);return;
@@ -378,7 +380,7 @@ function buildSVG({width,height,transparent=false,print=null}){
     if(state.style!=='filaments')for(let i=0;i<model.markCount;i++){
       const alpha=pose.dotAlpha[i];if(alpha<.001)continue;const q=project(pose.dotPositions.subarray(i*3,i*3+3));if(!visible(q))continue;
       const radius=clamp(pose.dotRadius[i]*2*(state.dotSize/3)*18/Math.max(2,q.d),.65,30)*scale*.5;
-      pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${p.primary}" opacity="${opacity(alpha)}"/>`);
+      circle(q,radius,p.primary,alpha);
     }
     pieces.push('</g></g></svg>');return pieces.join('');
   }
@@ -391,7 +393,7 @@ function buildSVG({width,height,transparent=false,print=null}){
       fadedSegment(projected[edge.a],projected[edge.b],p.primary,scale,t=>base*(a+(b-a)*t));
     }
     pieces.push('</g>');
-    if(state.style!=='filaments')for(const index of model.dotIndices){const q=projected[index];if(!visible(q))continue;const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${p.primary}" opacity="${opacity(surface.dotOpacity)}"/>`);}
+    if(state.style!=='filaments')for(const index of model.dotIndices){const q=projected[index];if(!visible(q))continue;const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5;circle(q,radius,p.primary,surface.dotOpacity);}
     pieces.push('</g></g></svg>');return pieces.join('');
   }
   if(state.style!=='dots'){
@@ -410,7 +412,7 @@ function buildSVG({width,height,transparent=false,print=null}){
   }
   if(state.style!=='filaments'){
     const dots=model.points.map((point,i)=>{const timing=pointTiming(point.g,point.variation,frame),pulse=pulseAt(point.g,point.variation,1,frame);return{...project(movingPosition(point.pos,origins[i],point.g,point.variation,frame)),tone:(point.variation>.91?.8:0)+pulse*.28,alpha:timing.alpha*(1+pulse*.5),size:1+timing.pop*.6*frame.energy+pulse*.16};}).filter(q=>q.alpha>.001&&q.z>-1&&q.z<1).sort((a,b)=>b.z-a.z);
-    for(const q of dots){const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5*q.size;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${color(q.tone)}" opacity="${opacity(Math.min(1,q.alpha))}"/>`);}
+    for(const q of dots){const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5*q.size;circle(q,radius,color(q.tone),Math.min(1,q.alpha));}
   }
   pieces.push('</g></g></svg>');return pieces.join('');
 }
@@ -418,37 +420,48 @@ function buildSVG({width,height,transparent=false,print=null}){
 let printProofURL=null;
 function currentPrintLayout(){
   const options={unit:$('print-unit').value,reinforce:$('print-reinforce').checked};
-  for(const key of ['width','height','bleed','line','dot','opacity']){const value=$('print-'+key).value;if(value.trim()==='')throw new Error('Complete every print size and detail field.');options[key]=Number(value);}
+  for(const key of ['width','height','line','dot','opacity']){const value=$('print-'+key).value;if(value.trim()==='')throw new Error('Complete every print size and detail field.');options[key]=Number(value);}
   return printLayout(options);
 }
-function makePrintSVG(layout){
+function makePrintArtwork(request){
   if(rebuildTimer)rebuild();let restore;
-  try{exporting=true;const ratio=layout.width/layout.height,width=ratio>=1?1200:1200*ratio,height=ratio>=1?1200/ratio:1200;restore=captureView(width,height,$('print-transparent').checked,true);applyFrame(state.progress);return buildSVG({width,height,transparent:$('print-transparent').checked,print:layout});}
-  finally{restore?.();exporting=false;}
+  try{
+    exporting=true;const width=1200,height=1200,transparent=$('print-transparent').checked;
+    restore=captureView(width,height,transparent,true);applyFrame(state.progress);
+    const measure=()=>({minX:Infinity,minY:Infinity,maxX:-Infinity,maxY:-Infinity});
+    let bounds=measure();buildSVG({width,height,transparent,bounds});
+    let result=cropPrintLayout(request,bounds);
+    // Measure reinforced marks at the final physical scale before setting the crop.
+    for(let i=0;i<6;i++){
+      bounds=measure();buildSVG({width,height,transparent,print:result.layout,crop:result.crop,bounds});
+      result=cropPrintLayout(request,bounds);
+    }
+    return {layout:result.layout,svg:buildSVG({width,height,transparent,print:result.layout,crop:result.crop})};
+  }finally{restore?.();exporting=false;}
 }
 function updatePrintOptions(){
   if(exporting)return;
   for(const key of ['line','dot','opacity'])$('print-'+key).disabled=!$('print-reinforce').checked;
   try{
-    const layout=currentPrintLayout();
-    $('print-summary').textContent=`Trim: ${layout.width.toFixed(3)} × ${layout.height.toFixed(3)} in · bleed ${layout.bleed.toFixed(3)} in per side\n300 PPI: ${layout.pixelWidth.toLocaleString()} × ${layout.pixelHeight.toLocaleString()} px including bleed. ${layout.rasterOK?'PNG + scalable SVG available.':'Use SVG at this size. PNG exceeds the 64 megapixel / 16,384 px edge limit.'}`;
+    const {layout,svg}=makePrintArtwork(currentPrintLayout());
+    $('print-summary').textContent=`Artwork: ${layout.width.toFixed(3)} × ${layout.height.toFixed(3)} in · 3% margin per side\n300 PPI: ${layout.pixelWidth.toLocaleString()} × ${layout.pixelHeight.toLocaleString()} px. ${layout.rasterOK?'PNG + scalable SVG available.':'Use SVG at this size. PNG exceeds the 64 megapixel / 16,384 px edge limit.'}`;
     if(Math.min(layout.width,layout.height)<4)$('print-summary').textContent+='\nDense forms can merge at small sizes. Reduce density or generations and proof at actual size.';
     if(!layout.reinforce)$('print-summary').textContent+='\nOriginal weights may be too fine for print. Check a full-size proof.';
     if($('print-transparent').checked)$('print-summary').textContent+='\nTransparency: check contrast against your final stock or background.';
-    const next=URL.createObjectURL(new Blob([makePrintSVG(layout)],{type:'image/svg+xml'}));
+    const next=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
     $('print-proof-image').src=next;if(printProofURL)URL.revokeObjectURL(printProofURL);printProofURL=next;
     $('print-proof-image').hidden=false;$('export-print-svg').disabled=false;$('export-print-png').disabled=!layout.rasterOK;
   }catch(error){$('print-summary').textContent=error.message;$('print-proof-image').hidden=true;$('export-print-svg').disabled=$('export-print-png').disabled=true;}
 }
 async function exportPrint(format){
   if(exporting)return;let layout,svg;
-  try{layout=currentPrintLayout();svg=makePrintSVG(layout);}catch(error){$('print-summary').textContent=error.message;return;}
+  try{({layout,svg}=makePrintArtwork(currentPrintLayout()));}catch(error){$('print-summary').textContent=error.message;return;}
   exporting=true;$('print-options').classList.add('print-busy');$('print-summary').textContent='Preparing print artwork…';
   try{
     // Let the progress message paint before rasterizing the vector master.
     await new Promise(resolve=>setTimeout(resolve,0));
     const blob=format==='svg'?new Blob([svg],{type:'image/svg+xml'}):await rasterizePrint(svg,layout,message=>{$('print-summary').textContent=message;});
-    download(blob,`print-${layout.totalWidth.toFixed(3)}x${layout.totalHeight.toFixed(3)}in${format==='png'?'-300ppi':''}.${format}`);$('print-summary').textContent=`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in including bleed${format==='png'?' · 300 PPI':''}.`;toast(`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in`);
+    download(blob,`print-${layout.totalWidth.toFixed(3)}x${layout.totalHeight.toFixed(3)}in${format==='png'?'-300ppi':''}.${format}`);$('print-summary').textContent=`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in${format==='png'?' · 300 PPI':''}.`;toast(`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in`);
   }catch(error){console.error(error);$('print-summary').textContent=error.message;toast('Print export could not finish. See the export panel.');}
   finally{exporting=false;$('print-options').classList.remove('print-busy');lastTime=0;dirty=true;}
 }

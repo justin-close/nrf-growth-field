@@ -1,31 +1,36 @@
 // Physical artwork sizes are independent of the browser viewport and device DPR.
 export const PRINT_PPI = 300;
 export const RASTER_LIMITS = {edge:16384, pixels:64_000_000};
-export const printPresets = {
-  card:{width:3.5,height:2,bleed:.125,line:.35,dot:1},
-  poster:{width:18,height:24,bleed:.125,line:.5,dot:1.5},
-  banner:{width:48,height:96,bleed:.25,line:1.5,dot:4}
-};
-export function printLayout({width,height,unit='in',bleed=0,line=.35,dot=1,opacity=35,reinforce=true}){
-  const values={width:Number(width),height:Number(height),bleed:Number(bleed),line:Number(line),dot:Number(dot),opacity:Number(opacity)};
+export function printLayout({width,height,unit='in',line=.35,dot=1,opacity=35,reinforce=true}){
+  const values={width:Number(width),height:Number(height),line:Number(line),dot:Number(dot),opacity:Number(opacity)};
   if(!['in','mm'].includes(unit))throw new Error('Choose inches or millimetres.');
   if(Object.values(values).some(v=>!Number.isFinite(v)))throw new Error('Enter a number in every print field.');
-  const divisor=unit==='mm'?25.4:1,w=values.width/divisor,h=values.height/divisor,b=values.bleed/divisor;
-  if(w<.1||h<.1||w>2400||h>2400)throw new Error('Trim dimensions must be between 0.1 and 2400 inches.');
+  const divisor=unit==='mm'?25.4:1,w=values.width/divisor,h=values.height/divisor;
+  if(w<.1||h<.1||w>2400||h>2400)throw new Error('Maximum dimensions must be between 0.1 and 2400 inches.');
   if(w/h>100||h/w>100)throw new Error('Use an aspect ratio between 1:100 and 100:1.');
-  if(b<0||b>2)throw new Error('Bleed must be between 0 and 2 inches per side.');
   if(values.line<.1||values.line>20||values.dot<.2||values.dot>40||values.opacity<0||values.opacity>100)throw new Error('Use 0.1–20 pt lines, 0.2–40 pt dots and 0–100% minimum opacity.');
-  const totalWidth=w+2*b,totalHeight=h+2*b,pixelWidth=Math.round(totalWidth*PRINT_PPI),pixelHeight=Math.round(totalHeight*PRINT_PPI);
+  return sizedLayout({line:values.line,dot:values.dot,opacity:values.opacity/100,reinforce:Boolean(reinforce)},w,h);
+}
+function sizedLayout(layout,width,height){
+  const pixelWidth=Math.max(1,Math.round(width*PRINT_PPI)),pixelHeight=Math.max(1,Math.round(height*PRINT_PPI));
   const rasterOK=pixelWidth<=RASTER_LIMITS.edge&&pixelHeight<=RASTER_LIMITS.edge&&pixelWidth*pixelHeight<=RASTER_LIMITS.pixels;
-  return {width:w,height:h,bleed:b,totalWidth,totalHeight,pixelWidth,pixelHeight,rasterOK,ppi:PRINT_PPI,line:values.line,dot:values.dot,opacity:values.opacity/100,reinforce:Boolean(reinforce)};
+  return {...layout,width,height,totalWidth:width,totalHeight:height,pixelWidth,pixelHeight,rasterOK,ppi:PRINT_PPI};
+}
+// Dimensions bound the artwork, rather than imposing an unrelated canvas ratio.
+export function cropPrintLayout(request,bounds){
+  if(![bounds.minX,bounds.minY,bounds.maxX,bounds.maxY].every(Number.isFinite))throw new Error('No visible artwork at this moment. Advance the growth before exporting.');
+  const w=Math.max(.001,bounds.maxX-bounds.minX),h=Math.max(.001,bounds.maxY-bounds.minY),margin=.03;
+  const crop={x:bounds.minX-w*margin,y:bounds.minY-h*margin,width:w*(1+2*margin),height:h*(1+2*margin)};
+  const scale=Math.min(request.width/crop.width,request.height/crop.height);
+  return {crop,layout:sizedLayout(request,crop.width*scale,crop.height*scale)};
 }
 export function printStroke(original,layout,unitsPerInch){return layout?.reinforce?Math.max(original,layout.line/72*unitsPerInch):original;}
 export function printRadius(original,layout,unitsPerInch){return layout?.reinforce?Math.max(original,layout.dot/144*unitsPerInch):original;}
 export function printAlpha(alpha,layout){const a=Math.max(0,Math.min(1,alpha));return layout?.reinforce&&a>=.001?Math.max(a,layout.opacity):a;}
-export function svgPhysicalFrame(width,height,layout){
-  if(!layout)return {attributes:`width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"`,width,height,inset:0};
-  const scale=width/layout.width,inset=layout.bleed*scale,w=width+2*inset,h=height+2*inset;
-  return {attributes:`width="${layout.totalWidth}in" height="${layout.totalHeight}in" viewBox="0 0 ${w} ${h}"`,width:w,height:h,inset};
+export function svgPhysicalFrame(width,height,layout,crop=null){
+  const frame=crop||{x:0,y:0,width,height};
+  const dimensions=layout?`width="${layout.width}in" height="${layout.height}in"`:`width="${width}" height="${height}"`;
+  return {...frame,attributes:`${dimensions} viewBox="${frame.x} ${frame.y} ${frame.width} ${frame.height}"`};
 }
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let i=0;i<8;i++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 export function crc32(bytes){let crc=0xffffffff;for(const b of bytes)crc=crcTable[(crc^b)&255]^(crc>>>8);return(crc^0xffffffff)>>>0;}
