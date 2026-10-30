@@ -7,7 +7,7 @@ import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
 import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
-import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs';
+import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs?v=20261030-print-crop';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
