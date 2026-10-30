@@ -75,7 +75,7 @@
   </main>
   <footer class="transport"><button id="play" class="play-button" aria-label="Play growth animation" title="Play / pause growth (Space)"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 3L17 10L6 17Z"/></svg></button><div class="transport-label"><strong id="motion-phase">Watch it grow</strong><span class="mono" id="progress-label">GENERATION 8.0 / 8</span></div><label for="progress" id="progress-accessible-label" class="sr-only">Growth progress</label><input id="progress" type="range" min="0" max="1000" value="1000"><span class="growth-readout mono" id="growth-readout">549×</span><button id="restart" class="icon-button" aria-label="Restart growth animation" title="Restart growth">↺</button><div class="transport-end mono">ONE IDEA. INFINITE POTENTIAL.</div></footer>
   <dialog id="export-dialog"><form method="dialog"><div class="dialog-heading"><div><span class="mono eyebrow">TAKE IT FURTHER</span><h2>Export your field.</h2></div><button id="export-close" class="icon-button" aria-label="Close export dialog">×</button></div>
-    <div class="segmented export-tabs" aria-label="Export format"><button type="button" data-export-tab="video" class="active" aria-pressed="true">Motion / MP4</button><button type="button" data-export-tab="still" aria-pressed="false">Image / PNG + SVG</button></div>
+    <div class="segmented export-tabs" aria-label="Export format"><button type="button" data-export-tab="video" class="active" aria-pressed="true">Motion / MP4</button><button type="button" data-export-tab="still" aria-pressed="false">Image / PNG + SVG</button><button type="button" data-export-tab="print" aria-pressed="false">Print</button></div>
     <div id="video-options">
       <p id="video-description">The complete growth sequence, with your colors and camera. Artwork only.</p>
       <label class="select-label" for="video-sequence">Sequence <select id="video-sequence"><option value="growth">Growth</option><option value="orbit">Orbit loop · fully grown</option></select></label>
@@ -91,6 +91,20 @@
       <div class="toggle-row"><label for="transparent">Transparent background</label><input type="checkbox" id="transparent" role="switch"></div>
       <div class="export-options"><button type="button" id="export-png" class="button">Download PNG ↗</button><button type="button" id="export-svg" class="wide-quiet">Download SVG ↗</button></div>
       <p class="small-note">SVG contains editable projected paths and dots. Images use the current canvas aspect ratio. Transparent images omit the background.</p>
+    </div>
+    <div id="print-options" hidden>
+      <p>Physical sizes, scalable filaments, and circular dots. Export the current growth moment and viewing angle, fitted to the trim area.</p>
+      <label class="select-label" for="print-preset">Format <select id="print-preset"><option value="card">Business card · 3.5 × 2 in</option><option value="poster" selected>Poster · 18 × 24 in</option><option value="banner">Banner · 48 × 96 in</option><option value="custom">Custom</option></select></label>
+      <div class="print-dimensions"><label for="print-width">Trim width<input id="print-width" type="number" min="0.1" step="any" value="18"></label><label for="print-height">Trim height<input id="print-height" type="number" min="0.1" step="any" value="24"></label><label for="print-unit">Units<select id="print-unit"><option value="in">Inches</option><option value="mm">Millimetres</option></select></label></div>
+      <label class="select-label" for="print-bleed">Bleed per side <input id="print-bleed" type="number" min="0" step="any" value="0.125"></label>
+      <div class="toggle-row"><label for="print-reinforce">Reinforce fine details for print</label><input type="checkbox" id="print-reinforce" role="switch" checked></div>
+      <div class="print-dimensions"><label for="print-line">Min. line · pt<input id="print-line" type="number" min="0.1" max="20" step="0.05" value="0.5"></label><label for="print-dot">Min. dot ⌀ · pt<input id="print-dot" type="number" min="0.2" max="40" step="0.1" value="1.5"></label><label for="print-opacity">Min. opacity · %<input id="print-opacity" type="number" min="0" max="100" step="1" value="35"></label></div>
+      <p class="small-note">Minimum sizes apply at the dimensions above. Reinforcement lifts delicate fades; your screen artwork stays unchanged. Set larger weights for distant viewing. Reducing the artwork later also reduces these weights.</p>
+      <div class="toggle-row"><label for="print-transparent">Transparent background</label><input type="checkbox" id="print-transparent" role="switch"></div>
+      <figure class="print-proof"><img id="print-proof-image" alt="Print composition preview"><figcaption class="small-note">Composition preview · not actual print size. Proof a full-size crop on the intended material.</figcaption></figure>
+      <p id="print-summary" class="small-note" role="status" aria-live="polite"></p>
+      <div class="export-options"><button type="button" id="export-print-svg" class="button">Print SVG ↗</button><button type="button" id="export-print-png" class="wide-quiet">300 PPI PNG ↗</button></div>
+      <p class="small-note">SVG stays vector at any size; use it for banners or place it in your layout and export the printer’s PDF. PNG includes 300 PPI metadata. Both use RGB NRF colors, not a CMYK press profile. Convert and proof with your printer’s profile; confirm bleed and minimum weights. No crop marks are added.</p>
     </div>
     <div id="export-progress" hidden><div class="export-progress-heading"><span id="export-status" role="status">Preparing…</span><span id="export-percent" class="mono">0%</span></div><progress id="video-progress" max="1" value="0" aria-label="Video export progress"></progress><button type="button" id="cancel-export" class="wide-quiet">Cancel export</button><p class="small-note">Rendering every frame. Keep this tab open until your download is ready.</p></div>
   </form></dialog>

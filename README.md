@@ -84,3 +84,41 @@ All diagram markers are circular. In **Finish → Filament fade**, choose **Silk
 ## Orbit loop
 
 Choose **Choreograph → Sequence → Orbit loop · fully grown** to rotate a completed visualization continuously. The **Revolution duration** sets one 360° vertical-axis turn, from 6 to 24 seconds. Preview, scrub, save and share this mode across all seven systems. The sequence can also be selected in **Export → Motion / MP4**. Each export contains one revolution with evenly spaced frames; enable repeat playback in your player or presentation for continuous motion. Growth, return and pulse effects are inactive in this sequence.
+
+## Print artwork
+
+Use **Export → Print** for physical artwork. Enter trim width/height in inches
+or millimetres and bleed per side. Business card, poster and banner presets are
+starting points, not printer specifications. The current moment is fitted to
+the new trim aspect ratio while retaining the viewing angle. Bleed extends the
+background; artwork is kept inside trim, with no crop marks.
+
+Print SVG is a projected, editable vector master with physical dimensions,
+round line caps, circular dot shapes and continuous vector transparency gradients.
+It does not contain a screenshot or embedded raster image. Place it at its stated
+size in a layout application, then export PDF using the printer's requirements.
+The SVG is the preferred output for large banners, including those beyond browser
+raster limits. Downstream applications may rasterize transparency when flattening;
+choose an appropriate resolution in the final print workflow.
+
+Optional reinforcement imposes minimum line width and dot diameter in points at
+the specified physical size, plus an opacity floor on visible marks. It applies
+to every system and to both print formats, preserving absent geometry. It can
+make the fade less delicate. Presets start at 0.35 pt / 1 pt for cards, 0.5 pt /
+1.5 pt for posters, and 1.5 pt / 4 pt for banners. Adjust for material, press,
+contrast and viewing distance. Placing the result at a different size scales the
+weights too. Dense overlaps can merge at small sizes: reduce trajectory density
+or generations and proof rather than assuming resolution alone prevents it.
+
+Print PNG rasterizes the same vector master at **300 PPI**, including bleed,
+and embeds PNG pHYs metadata (11811 pixels/metre, approximately 300 PPI) plus an
+sRGB declaration. It does not upscale a screen capture. Browser exports are
+limited to 64 megapixels and 16,384 pixels per edge; larger artwork remains
+available as SVG. Memory availability may impose lower limits on some devices.
+
+These are RGB assets, not CMYK/PDF-X press files. Neon-like RGB palette colors
+may change on conversion. Use the printer's ICC profile and output requirements,
+check separations/overprint in the final layout, and obtain an actual-size proof
+or crop on the intended stock. The tool cannot guarantee physical reproduction
+on all inks, papers or hanging-banner materials. Banner dimensions and vendor
+specifications should determine final weights and proofing.

@@ -7,6 +7,7 @@ import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
 import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
+import { printPresets, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
@@ -250,10 +251,15 @@ function initUI(){
   $('save').onclick=saveStudy;$('share').onclick=share;
   $('panel-toggle').onclick=()=>{const hidden=document.body.classList.toggle('panel-hidden');$('panel-toggle').setAttribute('aria-expanded',!hidden);};
   $('focus').onclick=toggleFocus;$('exit-focus').onclick=toggleFocus;
-  $('export-open').onclick=()=>{if(rebuildTimer)rebuild();playing=false;updatePlayButton();$('export-dialog').showModal();updateVideoOptions();};$('export-png').onclick=()=>exportPNG();$('export-svg').onclick=()=>exportSVG();
+  $('export-open').onclick=()=>{if(rebuildTimer)rebuild();playing=false;updatePlayButton();$('export-dialog').showModal();updateVideoOptions();if(!$('print-options').hidden)updatePrintOptions();};$('export-png').onclick=()=>exportPNG();$('export-svg').onclick=()=>exportSVG();
   $('export-video').onclick=exportVideo;$('cancel-export').onclick=()=>exportController?.abort();
   for(const key of ['video-size','video-ratio'])$(key).onchange=updateVideoOptions;
-  $$('[data-export-tab]').forEach(b=>b.onclick=()=>{const video=b.dataset.exportTab==='video';$('video-options').hidden=!video;$('still-options').hidden=video;$$('[data-export-tab]').forEach(tab=>{const active=tab===b;tab.classList.toggle('active',active);tab.setAttribute('aria-pressed',active);});});
+  $$('[data-export-tab]').forEach(b=>b.onclick=()=>{for(const name of ['video','still','print'])$(name+'-options').hidden=b.dataset.exportTab!==name;$$('[data-export-tab]').forEach(tab=>{const active=tab===b;tab.classList.toggle('active',active);tab.setAttribute('aria-pressed',active);});if(b.dataset.exportTab==='print')updatePrintOptions();});
+  $('print-preset').onchange=()=>{const preset=printPresets[$('print-preset').value];if(preset){const factor=$('print-unit').value==='mm'?25.4:1;for(const key of ['width','height','bleed'])$('print-'+key).value=Number((preset[key]*factor).toFixed(4));$('print-line').value=preset.line;$('print-dot').value=preset.dot;}updatePrintOptions();};
+  let printUnit='in',printTimer;
+  $('print-unit').onchange=()=>{const next=$('print-unit').value,factor=next===printUnit?1:next==='mm'?25.4:1/25.4;for(const key of ['width','height','bleed']){const input=$('print-'+key);if(input.value!=='')input.value=Number((Number(input.value)*factor).toFixed(6));}printUnit=next;updatePrintOptions();};
+  for(const key of ['width','height','bleed','line','dot','opacity','reinforce','transparent'])$('print-'+key).addEventListener('input',()=>{if(['width','height','bleed'].includes(key))$('print-preset').value='custom';clearTimeout(printTimer);printTimer=setTimeout(updatePrintOptions,350);});
+  $('export-print-svg').onclick=()=>exportPrint('svg');$('export-print-png').onclick=()=>exportPrint('png');
   $('export-dialog').addEventListener('cancel',e=>{if(exporting){e.preventDefault();exportController?.abort();}});
   $('export-dialog').addEventListener('submit',e=>{if(exporting)e.preventDefault();});
   $('export-dialog').addEventListener('click',e=>{if(!exporting&&e.target===$('export-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
@@ -333,17 +339,24 @@ async function exportVideo(){
 }
 function exportSVG(){
   if(exporting)return;if(rebuildTimer)rebuild();applyFrame(state.progress);
-  const width=+$('export-size').value,height=Math.round(width/camera.aspect),p=palettes[state.palette],transparent=$('transparent').checked,scale=width/renderer.getSize(new THREE.Vector2()).x,frame=motionFrame;
+  const width=+$('export-size').value,height=Math.round(width/camera.aspect);
+  download(new Blob([buildSVG({width,height,transparent:$('transparent').checked})],{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');
+}
+function buildSVG({width,height,transparent=false,print=null}){
+  const p=palettes[state.palette],scale=width/renderer.getSize(new THREE.Vector2()).x,frame=motionFrame,unitsPerInch=print?width/print.width:0;
   camera.updateMatrixWorld();art.updateMatrixWorld();const v=new THREE.Vector3(),view=new THREE.Vector3();
   const project=(pos,inArt=true)=>{v.fromArray(pos);if(inArt)v.applyMatrix4(art.matrixWorld);view.copy(v).applyMatrix4(camera.matrixWorldInverse);v.project(camera);return{x:(v.x*.5+.5)*width,y:(-.5*v.y+.5)*height,z:v.z,d:-view.z};};
   const color=tone=>'#'+new THREE.Color(p.primary).lerp(new THREE.Color(p.secondary),clamp(tone,0,1)).getHexString();
   const description=fieldArtwork?`Procedural filament field. ${model.traces.length} trajectories, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds. Arbitrary units.`:cascadingArtwork?`Parametric surface. ${state.folds} primary folds, amplitude ${state.foldAmplitude}. Continuous growth at ${(state.progress*state.duration).toFixed(2)} seconds. Chart coordinates use arbitrary units.`:`Synthetic creative study. Growth factor ${state.rate}, ${state.generations} generations, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds.`;
-  const number=n=>Number(n.toFixed(2)),opacity=n=>Number(n.toFixed(4));const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}</desc><defs><clipPath id="frame"><rect width="${width}" height="${height}"/></clipPath></defs>`];
-  if(!transparent)pieces.push(`<rect width="${width}" height="${height}" fill="${p.bg}"/>`);pieces.push('<g clip-path="url(#frame)">');
+  const number=n=>Number(n.toFixed(print?5:2)),opacity=n=>Number(printAlpha(n,print).toFixed(4)),dotRadius=n=>number(printRadius(n,print,unitsPerInch)),physical=svgPhysicalFrame(width,height,print);
+  const printDescription=print?` Print artwork: trim ${print.width} × ${print.height} in; bleed ${print.bleed} in per side; RGB/sRGB colors. ${print.reinforce?`Minimum line ${print.line} pt; minimum dot diameter ${print.dot} pt; opacity floor ${print.opacity*100}%.`:'Original detail weights.'} Raster target 300 PPI.`:'';
+  const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" ${physical.attributes}><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}${printDescription}</desc><defs><clipPath id="frame"><rect width="${width}" height="${height}"/></clipPath></defs>`];
+  if(!transparent)pieces.push(`<rect width="${physical.width}" height="${physical.height}" fill="${p.bg}"/>`);pieces.push(`<g stroke-linecap="round" transform="translate(${physical.inset} ${physical.inset})"><g clip-path="url(#frame)">`);
   let gradientIndex=0;
   const fadedSegment=(a,b,stroke,width,alphaAt)=>{
     if(a.z<=-1||a.z>=1||b.z<=-1||b.z>=1)return;
     const stops=[0,.25,.5,.75,1].map(t=>[t,clamp(alphaAt(t),0,1)]);
+    width=printStroke(width,print,unitsPerInch);
     if(stops.every(([,alpha])=>alpha<.001))return;
     const path=`M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}`;
     if(stops.every(([,alpha])=>Math.abs(alpha-stops[0][1])<.0001)){
@@ -365,9 +378,9 @@ function exportSVG(){
     if(state.style!=='filaments')for(let i=0;i<model.markCount;i++){
       const alpha=pose.dotAlpha[i];if(alpha<.001)continue;const q=project(pose.dotPositions.subarray(i*3,i*3+3));if(!visible(q))continue;
       const radius=clamp(pose.dotRadius[i]*2*(state.dotSize/3)*18/Math.max(2,q.d),.65,30)*scale*.5;
-      pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${p.primary}" opacity="${opacity(alpha)}"/>`);
+      pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${p.primary}" opacity="${opacity(alpha)}"/>`);
     }
-    pieces.push('</g></svg>');download(new Blob(pieces,{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');return;
+    pieces.push('</g></g></svg>');return pieces.join('');
   }
   if(cascadingArtwork){
     const surface=cascadingArtwork.snapshot(),visible=q=>q.z>-1&&q.z<1;
@@ -375,11 +388,11 @@ function exportSVG(){
     const projected=Array.from({length:surface.positions.length/3},(_,i)=>project(surface.positions.subarray(i*3,i*3+3)));
     if(state.style!=='dots')for(const rim of [false,true])for(const edge of model.edges)if(Boolean(edge.rim)===rim){
       const base=rim?surface.rimOpacity:surface.meshOpacity,a=surface.lineFade[edge.a],b=surface.lineFade[edge.b];
-      fadedSegment(projected[edge.a],projected[edge.b],p.primary,1,t=>base*(a+(b-a)*t));
+      fadedSegment(projected[edge.a],projected[edge.b],p.primary,scale,t=>base*(a+(b-a)*t));
     }
     pieces.push('</g>');
-    if(state.style!=='filaments')for(const index of model.dotIndices){const q=projected[index];if(!visible(q))continue;const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${p.primary}" opacity="${number(surface.dotOpacity)}"/>`);}
-    pieces.push('</g></svg>');download(new Blob(pieces,{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');return;
+    if(state.style!=='filaments')for(const index of model.dotIndices){const q=projected[index];if(!visible(q))continue;const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${p.primary}" opacity="${opacity(surface.dotOpacity)}"/>`);}
+    pieces.push('</g></g></svg>');return pieces.join('');
   }
   if(state.style!=='dots'){
     pieces.push(`<g fill="none" stroke-width="${number(scale)}" stroke-linecap="round">`);
@@ -397,7 +410,45 @@ function exportSVG(){
   }
   if(state.style!=='filaments'){
     const dots=model.points.map((point,i)=>{const timing=pointTiming(point.g,point.variation,frame),pulse=pulseAt(point.g,point.variation,1,frame);return{...project(movingPosition(point.pos,origins[i],point.g,point.variation,frame)),tone:(point.variation>.91?.8:0)+pulse*.28,alpha:timing.alpha*(1+pulse*.5),size:1+timing.pop*.6*frame.energy+pulse*.16};}).filter(q=>q.alpha>.001&&q.z>-1&&q.z<1).sort((a,b)=>b.z-a.z);
-    for(const q of dots){const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5*q.size;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${number(radius)}" fill="${color(q.tone)}" opacity="${number(Math.min(1,q.alpha))}"/>`);}
+    for(const q of dots){const radius=clamp(state.dotSize*18/Math.max(2,q.d),1,30)*scale*.5*q.size;pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${dotRadius(radius)}" fill="${color(q.tone)}" opacity="${opacity(Math.min(1,q.alpha))}"/>`);}
   }
-  pieces.push('</g></svg>');download(new Blob(pieces,{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');
+  pieces.push('</g></g></svg>');return pieces.join('');
+}
+
+let printProofURL=null;
+function currentPrintLayout(){
+  const options={unit:$('print-unit').value,reinforce:$('print-reinforce').checked};
+  for(const key of ['width','height','bleed','line','dot','opacity']){const value=$('print-'+key).value;if(value.trim()==='')throw new Error('Complete every print size and detail field.');options[key]=Number(value);}
+  return printLayout(options);
+}
+function makePrintSVG(layout){
+  if(rebuildTimer)rebuild();let restore;
+  try{exporting=true;const ratio=layout.width/layout.height,width=ratio>=1?1200:1200*ratio,height=ratio>=1?1200/ratio:1200;restore=captureView(width,height,$('print-transparent').checked,true);applyFrame(state.progress);return buildSVG({width,height,transparent:$('print-transparent').checked,print:layout});}
+  finally{restore?.();exporting=false;}
+}
+function updatePrintOptions(){
+  if(exporting)return;
+  for(const key of ['line','dot','opacity'])$('print-'+key).disabled=!$('print-reinforce').checked;
+  try{
+    const layout=currentPrintLayout();
+    $('print-summary').textContent=`Trim: ${layout.width.toFixed(3)} × ${layout.height.toFixed(3)} in · bleed ${layout.bleed.toFixed(3)} in per side\n300 PPI: ${layout.pixelWidth.toLocaleString()} × ${layout.pixelHeight.toLocaleString()} px including bleed. ${layout.rasterOK?'PNG + scalable SVG available.':'Use SVG at this size. PNG exceeds the 64 megapixel / 16,384 px edge limit.'}`;
+    if(Math.min(layout.width,layout.height)<4)$('print-summary').textContent+='\nDense forms can merge at small sizes. Reduce density or generations and proof at actual size.';
+    if(!layout.reinforce)$('print-summary').textContent+='\nOriginal weights may be too fine for print. Check a full-size proof.';
+    if($('print-transparent').checked)$('print-summary').textContent+='\nTransparency: check contrast against your final stock or background.';
+    const next=URL.createObjectURL(new Blob([makePrintSVG(layout)],{type:'image/svg+xml'}));
+    $('print-proof-image').src=next;if(printProofURL)URL.revokeObjectURL(printProofURL);printProofURL=next;
+    $('print-proof-image').hidden=false;$('export-print-svg').disabled=false;$('export-print-png').disabled=!layout.rasterOK;
+  }catch(error){$('print-summary').textContent=error.message;$('print-proof-image').hidden=true;$('export-print-svg').disabled=$('export-print-png').disabled=true;}
+}
+async function exportPrint(format){
+  if(exporting)return;let layout,svg;
+  try{layout=currentPrintLayout();svg=makePrintSVG(layout);}catch(error){$('print-summary').textContent=error.message;return;}
+  exporting=true;$('print-options').classList.add('print-busy');$('print-summary').textContent='Preparing print artwork…';
+  try{
+    // Let the progress message paint before rasterizing the vector master.
+    await new Promise(resolve=>setTimeout(resolve,0));
+    const blob=format==='svg'?new Blob([svg],{type:'image/svg+xml'}):await rasterizePrint(svg,layout,message=>{$('print-summary').textContent=message;});
+    download(blob,`print-${layout.totalWidth.toFixed(3)}x${layout.totalHeight.toFixed(3)}in${format==='png'?'-300ppi':''}.${format}`);$('print-summary').textContent=`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in including bleed${format==='png'?' · 300 PPI':''}.`;toast(`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in`);
+  }catch(error){console.error(error);$('print-summary').textContent=error.message;toast('Print export could not finish. See the export panel.');}
+  finally{exporting=false;$('print-options').classList.remove('print-busy');lastTime=0;dirty=true;}
 }
