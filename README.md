@@ -110,8 +110,8 @@ its ink plate. Physical size and the 3% artwork crop match the preview. PDF User
 preserves sizes above the standard 200-inch page-coordinate limit.
 
 Ink definitions live in `print-colors.mjs`, verified against Figma node 4028:6979
-on 2026-10-30, including revised Vivid Blue (#0005C6; CMYK 100/90/0/7;
-PMS 072) and Oxford Blue (#000F82; CMYK 100/87/0/20; PMS Reflex Blue).
+on 2026-10-30, including revised Vivid Blue (#59FFFF; CMYK 47/0/3/0;
+PMS 2197) and Reflex Blue (#000F82; CMYK 100/87/0/20; PMS Reflex Blue).
 Spot references intentionally have no coated/uncoated suffix because
 the source does not specify one. These PDFs do not claim PDF/X compliance and do
 not embed an invented press ICC output intent. Ask the printer to confirm the

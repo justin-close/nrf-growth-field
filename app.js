@@ -7,21 +7,21 @@ import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
 import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
-import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs?v=20261030-blue-update';
+import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs?v=20261030-blue-update2';
 
-import {buildPrintPDF} from './print-pdf.mjs?v=20261030-blue-update';
-import {artworkInks} from './print-colors.mjs?v=20261030-blue-update';
+import {buildPrintPDF} from './print-pdf.mjs?v=20261030-blue-update2';
+import {artworkInks} from './print-colors.mjs?v=20261030-blue-update2';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
 const palettes=[
   {name:'Fresh Green / Expanse',bg:'#121412',primary:'#5AEB41',secondary:'#F6F5EF',text:'#F6F5EF',muted:'#a4aaa1'},
-  {name:'Vivid Blue / Chalk',bg:'#F6F5EF',primary:'#0005C6',secondary:'#000F82',text:'#121412',muted:'#5c6257'},
+  {name:'Vivid Blue / Reflex Blue',bg:'#000F82',primary:'#59FFFF',secondary:'#F6F5EF',text:'#F6F5EF',muted:'#b5c5e4'},
   {name:'Orange / Mahogany',bg:'#65131A',primary:'#FF5825',secondary:'#F6F5EF',text:'#F6F5EF',muted:'#e6bcb6'},
   {name:'Fresh Green / Fir',bg:'#173B2B',primary:'#5AEB41',secondary:'#F6F5EF',text:'#F6F5EF',muted:'#b0cbb7'},
-  {name:'Chalk / Oxford Blue',bg:'#000F82',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#b5c5e4'},
+  {name:'Chalk / Reflex Blue',bg:'#000F82',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#b5c5e4'},
   {name:'Expanse / Fresh Green',bg:'#5AEB41',primary:'#121412',secondary:'#173B2B',text:'#121412',muted:'#244f1c'},
-  {name:'Chalk / Vivid Blue',bg:'#0005C6',primary:'#F6F5EF',secondary:'#5AEB41',text:'#F6F5EF',muted:'#c4ceff'}
+  {name:'Expanse / Vivid Blue',bg:'#59FFFF',primary:'#121412',secondary:'#000F82',text:'#121412',muted:'#244f50'}
 ];
 const forms={ascent:{number:'01',label:'EXPONENTIAL GROWTH'},multiply:{number:'02',label:'MULTIPLICITY'},network:{number:'03',label:'NETWORK EFFECT'},cascading:{number:'04',label:'CASCADING FOLDS'},radial:{number:'05',label:'RADIAL PROLIFERATION'},shell:{number:'06',label:'DISSEMINATION SHELL'},bifurcation:{number:'07',label:'BIFURCATION FIELD'}};
 const finishLabels={off:'Even strands, with the original clarity.',silk:'Softly tapered strands gather into a fine, luminous weave.',veil:'Staggered translucent bands create layered, airy texture.'};

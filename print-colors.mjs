@@ -3,10 +3,10 @@
 export const PALETTE_SOURCE='https://www.figma.com/design/cxlHWMSFQl82XaRkXWEyVx/NRF-2027?node-id=4028-6979';
 export const PRINT_COLORS=Object.freeze([
   {name:'Fresh Green',hex:'#5AEB41',cmyk:[51,0,86,0],pms:'7488'},
-  {name:'Vivid Blue',hex:'#0005C6',cmyk:[100,90,0,7],pms:'072'},
+  {name:'Vivid Blue',hex:'#59FFFF',cmyk:[47,0,3,0],pms:'2197'},
   {name:'Orange',hex:'#FF5825',cmyk:[0,74,100,0],pms:'Orange 021'},
   {name:'Fir',hex:'#173B2B',cmyk:[88,24,66,74],pms:'567'},
-  {name:'Oxford Blue',hex:'#000F82',cmyk:[100,87,0,20],pms:'Reflex Blue'},
+  {name:'Reflex Blue',hex:'#000F82',cmyk:[100,87,0,20],pms:'Reflex Blue'},
   {name:'Mahogany',hex:'#65131A',cmyk:[4,91,74,48],pms:'7624'},
   {name:'Expanse Black',hex:'#121412',cmyk:[100,61,32,96],pms:'Black 6'},
   {name:'Chalk',hex:'#F6F5EF',cmyk:[4,3,7,0],pms:'9285'}

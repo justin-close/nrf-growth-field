@@ -263,7 +263,7 @@ test('scene styles, palette and export pixel ratio update the shared pose withou
         assert.equal(alphaEnd.getX(i),art.snapshot().lineAlpha[i*2+1]);
       }
     }
-    art.setPalette({primary:'#0005C6'});assert.equal(lines.material.uniforms.uColor.value.getHexString(),'0005c6');assert.equal(dots.material.uniforms.uColor.value.getHexString(),'0005c6');
+    art.setPalette({primary:'#59FFFF'});assert.equal(lines.material.uniforms.uColor.value.getHexString(),'59ffff');assert.equal(dots.material.uniforms.uColor.value.getHexString(),'59ffff');
     art.setPixelRatio(2);assert.equal(dots.material.uniforms.uPixelRatio.value,2);assert.equal(lines.material.uniforms.uPixelRatio.value,2);
     for(const object of [lines,dots]){object.geometry.dispose();object.material.dispose();}
   }
