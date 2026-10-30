@@ -6,7 +6,7 @@
   <meta name="description" content="An NRF 2027 creative instrument. Explore seven floating growth systems, animate them in 3D, and export images or video.">
   <title>Growth Field — NRF 2027</title>
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="style.css?v=20261030-print-crop">
+  <link rel="stylesheet" href="style.css?v=20261030-print-inks">
   <script type="importmap">{"imports":{"three":"./vendor/three.module.min.js","three/addons/controls/OrbitControls.js":"./vendor/OrbitControls.js"}}</script>
 </head>
 <body>
@@ -95,18 +95,22 @@
       <p class="small-note">Set the maximum artwork size. Exports follow the visualization’s proportions, closely cropped with a small margin.</p>
       <p>Physical sizes, scalable filaments, and circular dots. Export the current growth moment and viewing angle.</p>
       <div class="print-dimensions"><label for="print-width">Max. width<input id="print-width" type="number" min="0.1" step="any" value="18"></label><label for="print-height">Max. height<input id="print-height" type="number" min="0.1" step="any" value="24"></label><label for="print-unit">Units<select id="print-unit"><option value="in">Inches</option><option value="mm">Millimetres</option></select></label></div>
+      <label class="select-label" for="print-color-mode">PDF ink system<select id="print-color-mode"><option value="cmyk">CMYK · approved process values</option><option value="pms">PMS · named spot inks</option></select></label>
+      <p id="print-color-note" class="small-note"></p>
+      <p id="print-ink-summary" class="small-note print-ink-summary"></p>
       <div class="toggle-row"><label for="print-reinforce">Reinforce fine details for print</label><input type="checkbox" id="print-reinforce" role="switch" checked></div>
       <div class="print-dimensions"><label for="print-line">Min. line · pt<input id="print-line" type="number" min="0.1" max="20" step="0.05" value="0.5"></label><label for="print-dot">Min. dot ⌀ · pt<input id="print-dot" type="number" min="0.2" max="40" step="0.1" value="1.5"></label><label for="print-opacity">Min. opacity · %<input id="print-opacity" type="number" min="0" max="100" step="1" value="35"></label></div>
       <p class="small-note">Minimum sizes apply at the reported output size. Reinforcement lifts delicate fades; your screen artwork stays unchanged. Set larger weights for distant viewing. Reducing the artwork later also reduces these weights.</p>
       <div class="toggle-row"><label for="print-transparent">Transparent background</label><input type="checkbox" id="print-transparent" role="switch"></div>
-      <figure class="print-proof"><img id="print-proof-image" alt="Print composition preview"><figcaption class="small-note">Artwork crop · 3% margin per side. Preview is not actual print size. Proof a full-size crop on the intended material.</figcaption></figure>
+      <figure class="print-proof"><img id="print-proof-image" alt="Print composition preview"><figcaption class="small-note">Artwork crop · 3% margin per side. RGB preview shows composition, not a print color proof. Proof a full-size crop on the intended material.</figcaption></figure>
       <p id="print-summary" class="small-note" role="status" aria-live="polite"></p>
-      <div class="export-options"><button type="button" id="export-print-svg" class="button">Print SVG ↗</button><button type="button" id="export-print-png" class="wide-quiet">300 PPI PNG ↗</button></div>
-      <p class="small-note">SVG stays vector at any size; use it for banners or place it in your layout and export the printer’s PDF. PNG includes 300 PPI metadata. Both use RGB NRF colors, not a CMYK press profile. Convert and proof with your printer’s profile; confirm minimum weights.</p>
+      <button type="button" id="export-print-pdf" class="button">Download CMYK PDF ↗</button>
+      <div class="export-options"><button type="button" id="export-print-svg" class="wide-quiet">RGB SVG ↗</button><button type="button" id="export-print-png" class="wide-quiet">RGB PNG · 300 PPI ↗</button></div>
+      <p class="small-note">PDF preserves vector artwork and the selected ink system. PNG and SVG remain RGB. Your printer should confirm stock, ink coating and press profile, and prepare any required PDF/X file without changing the approved ink values.</p>
     </div>
     <div id="export-progress" hidden><div class="export-progress-heading"><span id="export-status" role="status">Preparing…</span><span id="export-percent" class="mono">0%</span></div><progress id="video-progress" max="1" value="0" aria-label="Video export progress"></progress><button type="button" id="cancel-export" class="wide-quiet">Cancel export</button><p class="small-note">Rendering every frame. Keep this tab open until your download is ready.</p></div>
   </form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=20261030-print-crop"></script>
+  <script type="module" src="app.js?v=20261030-print-inks"></script>
 </body>
 </html>

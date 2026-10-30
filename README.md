@@ -95,17 +95,36 @@ the preview reports the actual physical size and pixel dimensions. There are no
 format presets, bleed fields or extra canvas area. Background color and
 transparency both use the same close crop.
 
-Print SVG is a projected, editable vector master with physical dimensions,
-round line caps, circular dot shapes and continuous vector transparency gradients.
-It does not contain a screenshot or embedded raster image. Place it at its stated
-size in a layout application, then export PDF using the printer's requirements.
-The SVG is the preferred output for large banners, including those beyond browser
-raster limits. Downstream applications may rasterize transparency when flattening;
-choose an appropriate resolution in the final print workflow.
+Choose **PDF ink system** and download the vector PDF:
+
+- **CMYK** writes the palette's exact C/M/Y/K percentages as process-color
+  operators. Accent blends interpolate the approved recipes, not RGB conversions.
+- **PMS** uses named PANTONE Separation plates and DeviceN mixtures for accents.
+  The approved CMYK recipes are embedded as alternate display values. A mixture
+  can add an accent plate; the panel lists all inks used by the current artwork.
+
+Both PDFs preserve vector filaments, round line caps, circular dots, knockout
+behavior and live transparency, including continuous filament fade masks. They
+contain no raster artwork or RGB painting operators. Transparent background omits
+its ink plate. Physical size and the 3% artwork crop match the preview. PDF UserUnit
+preserves sizes above the standard 200-inch page-coordinate limit.
+
+Ink definitions live in `print-colors.mjs`, verified against Figma node 4028:6979
+on 2026-10-30. Spot references intentionally have no coated/uncoated suffix because
+the source does not specify one. These PDFs do not claim PDF/X compliance and do
+not embed an invented press ICC output intent. Ask the printer to confirm the
+stock, ink coating, output profile, trapping, total ink limit and any PDF/X
+conversion while preserving process numbers and named spots. Browser/PDF previews
+are not contract color proofs; PMS alternates approximate ink appearance.
+
+**RGB SVG** remains an editable projected vector master with physical dimensions;
+**RGB PNG** is the 300 PPI raster copy. These formats do not encode CMYK or spot
+plates. Prefer the selected PDF for production print, including large banners.
+Downstream flattening may rasterize transparency; set its resolution deliberately.
 
 Optional reinforcement imposes minimum line width and dot diameter in points at
 the specified physical size, plus an opacity floor on visible marks. It applies
-to every system and to both print formats, preserving absent geometry. It can
+to every system and to all print formats, preserving absent geometry. It can
 make the fade less delicate. Adjust weights for material, press,
 contrast and viewing distance. Placing the result at a different size scales the
 weights too. Dense overlaps can merge at small sizes: reduce trajectory density
@@ -115,11 +134,9 @@ Print PNG rasterizes the same vector master at **300 PPI** at the reported cropp
 and embeds PNG pHYs metadata (11811 pixels/metre, approximately 300 PPI) plus an
 sRGB declaration. It does not upscale a screen capture. Browser exports are
 limited to 64 megapixels and 16,384 pixels per edge; larger artwork remains
-available as SVG. Memory availability may impose lower limits on some devices.
+available as PDF or SVG. Memory availability may impose lower limits on some devices.
 
-These are RGB assets, not CMYK/PDF-X press files. Neon-like RGB palette colors
-may change on conversion. Use the printer's ICC profile and output requirements,
-check separations/overprint in the final layout, and obtain an actual-size proof
-or crop on the intended stock. The tool cannot guarantee physical reproduction
-on all inks, papers or hanging-banner materials. Banner dimensions and vendor
-specifications should determine final weights and proofing.
+Obtain an actual-size proof or crop on the intended stock. The tool preserves
+approved ink definitions, but cannot guarantee reproduction on every ink, paper
+or hanging-banner material. Banner specifications and viewing distance should
+determine final weights and proofing.

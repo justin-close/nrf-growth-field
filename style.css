@@ -18,3 +18,5 @@
 .filament-controls{margin-top:22px;padding-top:18px;border-top:1px solid var(--stroke)}.filament-controls>.range-label{display:block;margin-bottom:10px}.filament-controls .small-note{font-size:11px;line-height:1.5;margin:10px 0 16px;min-height:33px}
 
 .print-dimensions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:18px 0}.print-dimensions label{font-size:11px;color:var(--muted);display:grid;gap:8px}.print-dimensions input,.print-dimensions select,#print-bleed{width:100%;min-width:0;background:#ffffff09;border:1px solid #ffffff30;color:var(--paper);padding:9px;border-radius:3px}.print-proof{margin:20px 0}.print-proof img{display:block;max-width:100%;max-height:240px;margin:auto;border:1px solid #ffffff25;background:repeating-conic-gradient(#343831 0% 25%,#242820 0% 50%) 50%/16px 16px}.print-proof figcaption{margin-top:8px}.print-busy{opacity:.7;pointer-events:none}#print-summary{white-space:pre-line}.exporting #print-options{display:none!important}
+
+#print-ink-summary{white-space:pre-line}#export-print-pdf{width:100%;margin-top:12px}

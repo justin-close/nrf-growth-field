@@ -7,7 +7,10 @@ import { createCascadingArtwork } from './cascading-scene.mjs';
 import { createFieldArtwork } from './fields-scene.mjs';
 import { isField, FIELD_LINE_WIDTH } from './fields.mjs';
 import { filamentFade, filamentFinishMode, filamentGLSL } from './finish.mjs';
-import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs?v=20261030-print-crop';
+import { cropPrintLayout, printLayout, printStroke, printRadius, printAlpha, svgPhysicalFrame, rasterizePrint } from './print-export.mjs?v=20261030-print-inks';
+
+import {buildPrintPDF} from './print-pdf.mjs?v=20261030-print-inks';
+import {artworkInks} from './print-colors.mjs';
 
 const $=id=>document.getElementById(id), $$=s=>[...document.querySelectorAll(s)];
 const STORAGE='nrf-growth-field-v1';
@@ -258,6 +261,8 @@ function initUI(){
   let printUnit='in',printTimer;
   $('print-unit').onchange=()=>{const next=$('print-unit').value,factor=next===printUnit?1:next==='mm'?25.4:1/25.4;for(const key of ['width','height']){const input=$('print-'+key);if(input.value!=='')input.value=Number((Number(input.value)*factor).toFixed(6));}printUnit=next;updatePrintOptions();};
   for(const key of ['width','height','line','dot','opacity','reinforce','transparent'])$('print-'+key).addEventListener('input',()=>{clearTimeout(printTimer);printTimer=setTimeout(updatePrintOptions,350);});
+  $('print-color-mode').onchange=updatePrintOptions;
+  $('export-print-pdf').onclick=()=>exportPrint('pdf');
   $('export-print-svg').onclick=()=>exportPrint('svg');$('export-print-png').onclick=()=>exportPrint('png');
   $('export-dialog').addEventListener('cancel',e=>{if(exporting){e.preventDefault();exportController?.abort();}});
   $('export-dialog').addEventListener('submit',e=>{if(exporting)e.preventDefault();});
@@ -341,15 +346,17 @@ function exportSVG(){
   const width=+$('export-size').value,height=Math.round(width/camera.aspect);
   download(new Blob([buildSVG({width,height,transparent:$('transparent').checked})],{type:'image/svg+xml'}),'svg');toast('Editable SVG exported.');
 }
-function buildSVG({width,height,transparent=false,print=null,crop=null,bounds=null}){
+function buildSVG({width,height,transparent=false,print=null,crop=null,bounds=null,capture=null}){
   const p=palettes[state.palette],scale=width/renderer.getSize(new THREE.Vector2()).x,frame=motionFrame,unitsPerInch=print?(crop?.width||width)/print.width:0;
   camera.updateMatrixWorld();art.updateMatrixWorld();const v=new THREE.Vector3(),view=new THREE.Vector3();
   const project=(pos,inArt=true)=>{v.fromArray(pos);if(inArt)v.applyMatrix4(art.matrixWorld);view.copy(v).applyMatrix4(camera.matrixWorldInverse);v.project(camera);return{x:(v.x*.5+.5)*width,y:(-.5*v.y+.5)*height,z:v.z,d:-view.z};};
-  const color=tone=>'#'+new THREE.Color(p.primary).lerp(new THREE.Color(p.secondary),clamp(tone,0,1)).getHexString();
+  const colorMixes=new Map();
+  const color=tone=>{tone=clamp(tone,0,1);const hex='#'+new THREE.Color(p.primary).lerp(new THREE.Color(p.secondary),tone).getHexString();colorMixes.set(hex,{primary:p.primary,secondary:p.secondary,tone});return hex;};
+  const ink=hex=>colorMixes.get(hex)||{primary:hex,tone:0};
   const description=fieldArtwork?`Procedural filament field. ${model.traces.length} trajectories, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds. Arbitrary units.`:cascadingArtwork?`Parametric surface. ${state.folds} primary folds, amplitude ${state.foldAmplitude}. Continuous growth at ${(state.progress*state.duration).toFixed(2)} seconds. Chart coordinates use arbitrary units.`:`Synthetic creative study. Growth factor ${state.rate}, ${state.generations} generations, seed ${state.seed}. ${state.motion} motion at ${(state.progress*state.duration).toFixed(2)} seconds.`;
   const number=n=>Number(n.toFixed(print?5:2)),opacity=n=>Number(printAlpha(n,print).toFixed(4)),dotRadius=n=>number(printRadius(n,print,unitsPerInch)),physical=svgPhysicalFrame(width,height,print,crop);
   const include=(q,r=0)=>{if(!bounds)return;bounds.minX=Math.min(bounds.minX,q.x-r);bounds.minY=Math.min(bounds.minY,q.y-r);bounds.maxX=Math.max(bounds.maxX,q.x+r);bounds.maxY=Math.max(bounds.maxY,q.y+r);};
-  const circle=(q,r,fill,alpha)=>{if(alpha<.001)return;r=dotRadius(r);include(q,r);pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${r}" fill="${fill}" opacity="${opacity(alpha)}"/>`);};
+  const circle=(q,r,fill,alpha)=>{if(alpha<.001)return;r=dotRadius(r);include(q,r);if(capture)capture.shapes.push({type:'circle',x:number(q.x),y:number(q.y),radius:r,alpha:opacity(alpha),ink:ink(fill)});pieces.push(`<circle cx="${number(q.x)}" cy="${number(q.y)}" r="${r}" fill="${fill}" opacity="${opacity(alpha)}"/>`);};
   const printDescription=print?` Print artwork: ${print.width} × ${print.height} in; close artwork crop with 3% margin per side; RGB/sRGB colors. ${print.reinforce?`Minimum line ${print.line} pt; minimum dot diameter ${print.dot} pt; opacity floor ${print.opacity*100}%.`:'Original detail weights.'} Raster target 300 PPI.`:'';
   const pieces=[`<svg xmlns="http://www.w3.org/2000/svg" ${physical.attributes}><title>NRF Growth Field — ${forms[state.form].label}</title><desc>${description}${printDescription}</desc><defs><clipPath id="frame"><rect x="${physical.x}" y="${physical.y}" width="${physical.width}" height="${physical.height}"/></clipPath></defs>`];
   if(!transparent)pieces.push(`<rect x="${physical.x}" y="${physical.y}" width="${physical.width}" height="${physical.height}" fill="${p.bg}"/>`);pieces.push(`<g stroke-linecap="round"><g clip-path="url(#frame)">`);
@@ -360,6 +367,7 @@ function buildSVG({width,height,transparent=false,print=null,crop=null,bounds=nu
     width=printStroke(width,print,unitsPerInch);
     if(stops.every(([,alpha])=>alpha<.001))return;
     include(a,width/2);include(b,width/2);
+    if(capture)capture.shapes.push({type:'line',a:{x:number(a.x),y:number(a.y)},b:{x:number(b.x),y:number(b.y)},width:number(width),stops:stops.map(([t,alpha])=>[t,opacity(alpha)]),ink:ink(stroke)});
     const path=`M${number(a.x)} ${number(a.y)}L${number(b.x)} ${number(b.y)}`;
     if(stops.every(([,alpha])=>Math.abs(alpha-stops[0][1])<.0001)){
       pieces.push(`<path d="${path}" fill="none" stroke="${stroke}" stroke-width="${number(width)}" opacity="${opacity(stops[0][1])}"/>`);return;
@@ -436,32 +444,39 @@ function makePrintArtwork(request){
       bounds=measure();buildSVG({width,height,transparent,print:result.layout,crop:result.crop,bounds});
       result=cropPrintLayout(request,bounds);
     }
-    return {layout:result.layout,svg:buildSVG({width,height,transparent,print:result.layout,crop:result.crop})};
+    const artwork={layout:result.layout,crop:result.crop,background:transparent?null:palettes[state.palette].bg,shapes:[]};
+    const svg=buildSVG({width,height,transparent,print:result.layout,crop:result.crop,capture:artwork});
+    return {layout:result.layout,svg,artwork};
   }finally{restore?.();exporting=false;}
 }
 function updatePrintOptions(){
   if(exporting)return;
   for(const key of ['line','dot','opacity'])$('print-'+key).disabled=!$('print-reinforce').checked;
   try{
-    const {layout,svg}=makePrintArtwork(currentPrintLayout());
-    $('print-summary').textContent=`Artwork: ${layout.width.toFixed(3)} × ${layout.height.toFixed(3)} in · 3% margin per side\n300 PPI: ${layout.pixelWidth.toLocaleString()} × ${layout.pixelHeight.toLocaleString()} px. ${layout.rasterOK?'PNG + scalable SVG available.':'Use SVG at this size. PNG exceeds the 64 megapixel / 16,384 px edge limit.'}`;
+    const {layout,svg,artwork}=makePrintArtwork(currentPrintLayout());
+    $('print-summary').textContent=`Artwork: ${layout.width.toFixed(3)} × ${layout.height.toFixed(3)} in · 3% margin per side\n300 PPI: ${layout.pixelWidth.toLocaleString()} × ${layout.pixelHeight.toLocaleString()} px. ${layout.rasterOK?'Vector PDF + RGB copies available.':'Use PDF or SVG at this size. PNG exceeds the 64 megapixel / 16,384 px edge limit.'}`;
     if(Math.min(layout.width,layout.height)<4)$('print-summary').textContent+='\nDense forms can merge at small sizes. Reduce density or generations and proof at actual size.';
     if(!layout.reinforce)$('print-summary').textContent+='\nOriginal weights may be too fine for print. Check a full-size proof.';
     if($('print-transparent').checked)$('print-summary').textContent+='\nTransparency: check contrast against your final stock or background.';
+    const mode=$('print-color-mode').value;
+    $('print-color-note').textContent=mode==='cmyk'?'PDF uses the approved CMYK ink percentages. Accent colors mix those recipes; fades retain live transparency.':'PDF preserves named PANTONE ink plates and accent ink mixtures. Fades retain live transparency. Confirm coated/uncoated ink names with your printer; the palette does not specify a suffix.';
+    $('print-ink-summary').textContent=artworkInks(artwork).map(c=>mode==='pms'?`${c.name} · PMS ${c.pms}`:`${c.name} · C${c.cmyk[0]} M${c.cmyk[1]} Y${c.cmyk[2]} K${c.cmyk[3]}`).join('\n');
+    $('export-print-pdf').textContent=mode==='cmyk'?'Download CMYK PDF ↗':'Download PMS PDF ↗';
     const next=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
     $('print-proof-image').src=next;if(printProofURL)URL.revokeObjectURL(printProofURL);printProofURL=next;
-    $('print-proof-image').hidden=false;$('export-print-svg').disabled=false;$('export-print-png').disabled=!layout.rasterOK;
-  }catch(error){$('print-summary').textContent=error.message;$('print-proof-image').hidden=true;$('export-print-svg').disabled=$('export-print-png').disabled=true;}
+    $('print-proof-image').hidden=false;$('export-print-pdf').disabled=$('export-print-svg').disabled=false;$('export-print-png').disabled=!layout.rasterOK;
+  }catch(error){$('print-summary').textContent=error.message;$('print-proof-image').hidden=true;$('export-print-pdf').disabled=$('export-print-svg').disabled=$('export-print-png').disabled=true;}
 }
 async function exportPrint(format){
-  if(exporting)return;let layout,svg;
-  try{({layout,svg}=makePrintArtwork(currentPrintLayout()));}catch(error){$('print-summary').textContent=error.message;return;}
+  if(exporting)return;let layout,svg,artwork;
+  try{({layout,svg,artwork}=makePrintArtwork(currentPrintLayout()));}catch(error){$('print-summary').textContent=error.message;return;}
   exporting=true;$('print-options').classList.add('print-busy');$('print-summary').textContent='Preparing print artwork…';
   try{
     // Let the progress message paint before rasterizing the vector master.
     await new Promise(resolve=>setTimeout(resolve,0));
-    const blob=format==='svg'?new Blob([svg],{type:'image/svg+xml'}):await rasterizePrint(svg,layout,message=>{$('print-summary').textContent=message;});
-    download(blob,`print-${layout.totalWidth.toFixed(3)}x${layout.totalHeight.toFixed(3)}in${format==='png'?'-300ppi':''}.${format}`);$('print-summary').textContent=`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in${format==='png'?' · 300 PPI':''}.`;toast(`Print ${format.toUpperCase()} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in`);
+    const mode=$('print-color-mode').value,label=format==='pdf'?(mode==='cmyk'?'CMYK PDF':'PMS PDF'):`RGB ${format.toUpperCase()}`;
+    const blob=format==='pdf'?buildPrintPDF(artwork,mode):format==='svg'?new Blob([svg],{type:'image/svg+xml'}):await rasterizePrint(svg,layout,message=>{$('print-summary').textContent=message;});
+    download(blob,`print-${layout.totalWidth.toFixed(3)}x${layout.totalHeight.toFixed(3)}in-${format==='pdf'?mode:'rgb'}${format==='png'?'-300ppi':''}.${format}`);$('print-summary').textContent=`${label} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in${format==='png'?' · 300 PPI':''}.`;toast(`${label} exported · ${layout.totalWidth.toFixed(3)} × ${layout.totalHeight.toFixed(3)} in`);
   }catch(error){console.error(error);$('print-summary').textContent=error.message;toast('Print export could not finish. See the export panel.');}
   finally{exporting=false;$('print-options').classList.remove('print-busy');lastTime=0;dirty=true;}
 }
