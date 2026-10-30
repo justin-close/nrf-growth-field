@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {readFile} from 'node:fs/promises';
 import {PRINT_COLORS,printColor,colorComponents,artworkInks} from '../print-colors.mjs';
 import {buildPrintPDF} from '../print-pdf.mjs';
 
@@ -9,8 +10,8 @@ const makeArtwork=()=>({layout:{width:3.5,height:2},crop:{x:-20,y:10,width:350,h
 ]});
 test('all eight ink recipes and PMS references exactly match the source palette',()=>{
   assert.deepEqual(PRINT_COLORS.map(c=>[c.hex,c.cmyk,c.pms]),[
-    ['#5AEB41',[51,0,86,0],'7488'],['#1F41FF',[90,47,0,0],'285'],['#FF5825',[0,74,100,0],'Orange 021'],['#173B2B',[88,24,66,74],'567'],
-    ['#062059',[100,52,0,58],'2955'],['#65131A',[4,91,74,48],'7624'],['#121412',[100,61,32,96],'Black 6'],['#F6F5EF',[4,3,7,0],'9285']
+    ['#5AEB41',[51,0,86,0],'7488'],['#0005C6',[100,90,0,7],'072'],['#FF5825',[0,74,100,0],'Orange 021'],['#173B2B',[88,24,66,74],'567'],
+    ['#000F82',[100,87,0,20],'Reflex Blue'],['#65131A',[4,91,74,48],'7624'],['#121412',[100,61,32,96],'Black 6'],['#F6F5EF',[4,3,7,0],'9285']
   ]);
   assert.equal(printColor('#5aeb41').pms,'7488');assert.throws(()=>printColor('#123456'),/No approved/);
 });
@@ -21,6 +22,28 @@ test('accent blends mix approved ink recipes, preserving exact endpoints and alp
   }
   assert.deepEqual(artworkInks(makeArtwork()).map(c=>c.pms),['Black 6','7488','9285']);
   const transparent=makeArtwork();transparent.background=null;assert.equal(artworkInks(transparent).length,2);
+});
+test('revised blue screen presets, palette metadata and PDF inks stay aligned',async()=>{
+  const palette=JSON.parse(await readFile(new URL('../palette.json',import.meta.url),'utf8'));
+  const app=await readFile(new URL('../app.js',import.meta.url),'utf8');
+  for(const name of ['Vivid Blue','Oxford Blue']){
+    const ink=PRINT_COLORS.find(c=>c.name===name);
+    assert.equal(palette.colors[name],ink.hex);
+    assert.deepEqual(palette.print[name],{cmyk:ink.cmyk,pms:ink.pms});
+    assert.ok(app.includes(ink.hex));
+  }
+  const artwork=makeArtwork();artwork.background='#000F82';artwork.shapes=[
+    {...artwork.shapes[0],ink:'#0005C6'},
+    {...artwork.shapes[1],ink:{primary:'#0005C6',secondary:'#000F82',tone:.5}}
+  ];
+  const process=await buildPrintPDF(artwork,'cmyk').text();
+  assert.match(process,/1 0\.87 0 0\.2 k/);assert.match(process,/1 0\.9 0 0\.07 k/);
+  assert.match(process,/1 0\.885 0 0\.135 K/);
+  const spot=await buildPrintPDF(artwork,'pms').text();
+  assert.match(spot,/\/Separation \/PANTONE#20072/);
+  assert.match(spot,/\/Separation \/PANTONE#20Reflex#20Blue/);
+  assert.match(spot,/\/DeviceN \[\/PANTONE#20072 \/PANTONE#20Reflex#20Blue\]/);
+  assert.doesNotMatch(app+process+spot,/#1F41FF|#062059|PANTONE#20285\b|PANTONE#202955\b/);
 });
 test('CMYK PDF has process operators, physical page dimensions, vector curves and grayscale fade masks',async()=>{
   const blob=buildPrintPDF(makeArtwork()),text=await blob.text();assert.equal(blob.type,'application/pdf');

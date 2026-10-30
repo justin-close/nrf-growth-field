@@ -2,10 +2,10 @@
   "verified": "2026-10-30",
   "colors": {
     "Fresh Green": "#5AEB41",
-    "Vivid Blue": "#1F41FF",
+    "Vivid Blue": "#0005C6",
     "Orange": "#FF5825",
     "Fir": "#173B2B",
-    "Oxford Blue": "#062059",
+    "Oxford Blue": "#000F82",
     "Mahogany": "#65131A",
     "Expanse Black": "#121412",
     "Chalk": "#F6F5EF"
@@ -22,12 +22,12 @@
     },
     "Vivid Blue": {
       "cmyk": [
+        100,
         90,
-        47,
         0,
-        0
+        7
       ],
-      "pms": "285"
+      "pms": "072"
     },
     "Orange": {
       "cmyk": [
@@ -50,11 +50,11 @@
     "Oxford Blue": {
       "cmyk": [
         100,
-        52,
+        87,
         0,
-        58
+        20
       ],
-      "pms": "2955"
+      "pms": "Reflex Blue"
     },
     "Mahogany": {
       "cmyk": [

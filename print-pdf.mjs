@@ -1,4 +1,4 @@
-import {PALETTE_SOURCE,colorComponents,artworkInks} from './print-colors.mjs';
+import {PALETTE_SOURCE,colorComponents,artworkInks} from './print-colors.mjs?v=20261030-blue-update';
 
 const n=value=>{if(!Number.isFinite(value))throw new Error('Invalid PDF geometry.');return value.toFixed(7).replace(/\.?0+$/,'');};
 const array=values=>values.map(n).join(' ');
