@@ -13,7 +13,7 @@ const app = fs.readFileSync(new URL('../app.js', import.meta.url), 'utf8');
 const begin = app.indexOf('function resetView('), end = app.indexOf('\nfunction disposeGroup(', begin);
 assert(begin >= 0 && end > begin, 'resetView must be available for direct projection testing');
 const reset = new Function('THREE', 'art', 'model', 'state', 'camera', 'controls', 'pivot', '$$', 'view', 'matchMedia',
-  `let dirty = false;\n${app.slice(begin, end)}\nresetView(view);\nreturn dirty;`);
+  `let dirty = false; const compositionBounds=model.framingPoints||model.points.map(p=>p.pos),sproutArtwork=null; const spins=()=>state.workspace==='motion'&&(state.turntable||state.sequence==='orbit'||state.rotMove);\n${app.slice(begin, end)}\nresetView(view);\nreturn dirty;`);
 const configuredMaxDistance = Number(app.match(/controls\.maxDistance\s*=\s*([\d.]+)/)?.[1]);
 assert(Number.isFinite(configuredMaxDistance), 'read the production initial camera-distance limit');
 const axis = new THREE.Vector3(0, 1, 0);
@@ -21,7 +21,7 @@ const forms = ['ascent', 'multiply', 'network', 'cascading', 'radial', 'shell', 
 const views = ['perspective', 'front', 'top'];
 
 function frame(settings, aspect, view, startingAngle = 0, compact = false) {
-  const state = { ...defaults, ...settings }, model = buildModel(state);
+  const state = { ...defaults,workspace:'motion', ...settings }, model = buildModel(state);
   const artworkPoints = model.points.map(p => new THREE.Vector3(...p.pos));
   const points = model.framingPoints ? model.framingPoints.map(p => new THREE.Vector3(...p)) : artworkPoints;
   // Framing bounds include the complete animated surface or trajectories.

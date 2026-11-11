@@ -4,7 +4,7 @@ A creative instrument for exploring exponential growth, multiplicity, and networ
 
 [Open the tool](https://justin-close.github.io/nrf-growth-field/)
 
-![Bifurcation field in the Chalk / Vivid Blue palette](docs/bifurcation-field.png)
+![Bifurcation field](docs/bifurcation-field.png)
 
 ## Seven growth systems
 
@@ -36,18 +36,28 @@ Open <http://localhost:8000>. Use a local server rather than opening `index.html
 
 - Drag to orbit, Shift-drag to pan, and scroll to zoom. On touchscreens, use one finger to orbit and two to pan or zoom.
 - Adjust growth factor and generations for the original systems; fold count and amplitude for Cascading folds; trajectory density for the filament fields.
-- Choose Cascade, Unfurl, or Pulse motion where available. Adjust energy, stagger, and a 6–24 second duration, or scrub to a specific moment.
-- Enable a grow-and-return loop or turntable rotation. Auto orbit is a separate preview control.
+- Choose Cascade, Unfurl, or Pulse motion where available. Adjust energy, stagger, and a 3–60 second duration, or scrub to a specific moment.
+- In Motion, set build/hold/return timing and layer optional effects. Repeat preview restarts the sequence; seamless looping uses Orbit.
 - Choose one of seven NRF color stories and Connected, Dots, or Filaments drawing styles.
 - Save up to 12 studies in browser storage. Share encodes the settings and camera into a URL fragment. No study data is sent to a server.
 
 Keyboard: arrows rotate, `+` / `−` zoom, `F` fits, `H` toggles focus, and Space plays or pauses when a control is not focused.
 
+## Still and Motion workspaces
+
+New sessions open in **Still** with fully grown artwork and no automatic playback. **Motion** reveals the timeline and an **Animation** tab beside **Shape & style**. The composition, palette, finish and base camera are shared; switching back to Still pauses playback without losing the motion playhead or settings. To capture a particular animated pose, use **Motion → Export animation → Current frame**.
+
+Motion includes independent build, hold and return timing; Cascade, Unfurl and Pulse; preset and custom cubic Bézier easing; growth from one dot; continued generations; branching filaments; outward drift; animated spread; camera zoom; rotation with origin/center pivots; and animated depth softness. Effects are optional and disclosed individually. Time sliders and custom curve coordinates support keyboard input. Changing duration retimes all effects proportionally.
+
+The motion integration adapts controls from the [contributor's motion study](https://nrf-growth-field-motion.quick.shopify.io/) while retaining the core NRF palettes, circular dots and print pipeline. Depth softness widens/fades dots and softens filaments; it is a stylized depth treatment, not a photographic lens simulation. Print always omits softness to retain crisp vector marks. Still exports use the fully grown composition; Motion image/print exports use the paused frame. Videos always render the complete sequence from its start.
+
+Growth sequences can jump when repeated, especially with independent camera moves or drift. Only **Seamless orbit loop** promises a seamless join. Larger video frames take more processing time; square/portrait 4K may be reduced to the H.264 frame limit shown in the export panel.
+
 ## Export
 
 - **PNG:** 1920 or 3840 pixels wide, using the current camera and growth moment; optional transparent background.
 - **SVG:** editable projected paths and dots, using the same animated pose as the preview.
-- **MP4:** silent H.264 video at 30 fps, with a 1280 or 1920 pixel long edge. Choose the current canvas, landscape, square, or portrait framing.
+- **MP4:** silent H.264 video at 30 fps, with a 1280, 1920, or 3840 pixel long edge (4K, subject to the H.264 frame limit). Choose the current canvas, landscape, square, or portrait framing.
 
 MP4 encoding runs locally with WebCodecs and requires a browser with H.264 encoding support in a secure context (`localhost` or HTTPS). The export panel checks availability before rendering. PNG and SVG remain available when video encoding is unsupported.
 
@@ -66,7 +76,10 @@ The tests use Node's built-in runner; there are no npm dependencies. They cover 
 - `model.mjs`: state validation and generational models.
 - `cascading.mjs` / `cascading-scene.mjs`: continuous folded surface and renderer.
 - `fields.mjs` / `fields-scene.mjs`: point-and-filament models and renderer.
-- `motion.mjs`: deterministic timeline shared by playback and export.
+- `motion.mjs`: deterministic timing, easing and effects shared by playback and export.
+- `workspace.mjs`: Still/Motion transitions and contextual export behavior.
+- `timing-ui.mjs`: accessible timing and custom curve controls.
+- `sprouts.mjs` / `dof.mjs`: deterministic branching and depth softness.
 - `video-export.mjs`: frame scheduling, H.264 encoding, and MP4 muxing.
 - `app.js`: interaction, camera, persistence, and image exports.
 - `vendor/`: locally bundled Three.js, OrbitControls, and MP4 muxer.
@@ -83,7 +96,7 @@ All diagram markers are circular. In **Finish → Filament fade**, choose **Silk
 
 ## Orbit loop
 
-Choose **Choreograph → Sequence → Orbit loop · fully grown** to rotate a completed visualization continuously. The **Revolution duration** sets one 360° vertical-axis turn, from 6 to 24 seconds. Preview, scrub, save and share this mode across all seven systems. The sequence can also be selected in **Export → Motion / MP4**. Each export contains one revolution with evenly spaced frames; enable repeat playback in your player or presentation for continuous motion. Growth, return and pulse effects are inactive in this sequence.
+Choose **Motion → Animation → Sequence → Seamless orbit loop**. Duration sets one 360° vertical-axis turn (3–60 seconds). The artwork stays fully grown; growth, animated camera/effects and return are inactive. Preview, scrub, save and share this mode across all seven systems. Each MP4 contains one revolution with evenly spaced frames and no duplicated endpoint. Repeat it in a player or presentation for continuous motion.
 
 ## Print artwork
 

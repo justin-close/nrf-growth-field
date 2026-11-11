@@ -75,7 +75,8 @@ async function findSupportedConfig(width, height, fps, session) {
     return { supported: false, reason: BROWSER_HELP };
   }
 
-  const bitrate = Math.round(Math.min(40_000_000, Math.max(4_000_000, width * height * fps * 0.28)));
+  // 4K needs a higher ceiling to keep hairline filaments clean.
+  const bitrate = Math.round(Math.min(width * height > 2_100_000 ? 80_000_000 : 40_000_000, Math.max(4_000_000, width * height * fps * 0.28)));
   for (const codec of CODECS) {
     session.check();
     const config = {
@@ -110,6 +111,18 @@ export async function checkVideoSupport({ width, height, fps = 30, signal } = {}
   } finally {
     session.dispose();
   }
+}
+
+// Yield to input and paint without a chained zero-delay timer. Browsers can
+// heavily throttle those timers in background tabs, stretching a short export.
+function yieldToUI(){
+  if(globalThis.scheduler?.yield)return globalThis.scheduler.yield();
+  if(typeof MessageChannel==='function')return new Promise(resolve=>{
+    const channel=new MessageChannel();
+    channel.port1.onmessage=()=>{channel.port1.close();channel.port2.close();resolve();};
+    channel.port2.postMessage(null);
+  });
+  return new Promise(resolve=>setTimeout(resolve,0));
 }
 
 async function waitForQueue(encoder, session) {
@@ -218,7 +231,7 @@ export async function exportGrowthVideo({ width, height, duration, fps = 30, ren
       progress('rendering', ((index + 1) / frames) * 0.95, index + 1);
       if (index % 4 === 3 || index === frames - 1) {
         // Give controls, cancellation and paint a turn even with a fast encoder.
-        await session.wait(new Promise(resolve => setTimeout(resolve, 0)), 30_000,
+        await session.wait(yieldToUI(), 30_000,
           'Video export was interrupted. Keep this tab open and try again.');
       }
     }

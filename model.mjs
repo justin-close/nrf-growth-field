@@ -1,20 +1,25 @@
 // Deterministic synthetic growth. No merchant data or financial forecasts.
-import { motionDefaults, sanitizeMotion } from './motion.mjs';
-import { buildCascadingModel } from './cascading.mjs';
-import { buildFieldModel, isField } from './fields.mjs';
+import { motionDefaults, sanitizeMotion } from './motion.mjs?v=20261111-motion-core';
+import { buildCascadingModel } from './cascading.mjs?v=20261111-motion-core';
+import { dofDefaults } from './dof.mjs?v=20261111-motion-core';
+import { buildFieldModel, isField } from './fields.mjs?v=20261111-motion-core';
 export const MAX_PER_GENERATION = 1500;
 export const TAU = Math.PI * 2;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
-export const defaults = { form:'ascent', rate:2.2, generations:8, spread:65, depth:70, twist:25, folds:11, foldAmplitude:1,density:100, palette:0, style:'connected', dotSize:3, lineOpacity:35, filamentFinish:'off', fadeStrength:65, autoOrbit:false, progress:1, seed:1, ...motionDefaults };
-export const bounds = {rate:[1.3,3],generations:[3,10],spread:[10,100],depth:[0,100],twist:[-180,180],folds:[4,20],foldAmplitude:[0,1.8],density:[35,180],palette:[0,6],dotSize:[1,7],lineOpacity:[5,90],fadeStrength:[0,100],progress:[0,1],seed:[1,999999]};
+// Fallbacks for keys a saved study or link leaves out, so older studies keep
+// opening exactly as they were made.
+export const baseDefaults = { form:'ascent', rate:2.2, generations:8, spread:65, depth:70, twist:25, folds:11, foldAmplitude:1,density:100, palette:0, style:'connected', dotSize:3, lineOpacity:35, filamentFinish:'off', fadeStrength:65, curvature:100, autoOrbit:false, progress:1, seed:1, ...dofDefaults, ...motionDefaults };
+export const bounds = {rate:[1.3,3],generations:[3,10],spread:[10,100],depth:[0,100],twist:[-180,180],folds:[4,20],foldAmplitude:[0,1.8],density:[35,180],palette:[0,6],dotSize:[1,7],lineOpacity:[5,90],fadeStrength:[0,100],curvature:[0,100],dofFocus:[0,100],dofBlur:[0,100],progress:[0,1],seed:[1,999999]};
 export function sanitize(input={}) {
-  const s={...defaults,...sanitizeMotion(input)};
+  const s={...baseDefaults,...sanitizeMotion(input)};
   for(const [k,[lo,hi]] of Object.entries(bounds)) if(typeof input[k]==='number'&&Number.isFinite(input[k])) s[k]=clamp(input[k],lo,hi);
   for(const k of ['generations','palette','seed','folds','density']) s[k]=Math.round(s[k]);
-  for(const k of ['autoOrbit']) if(typeof input[k]==='boolean') s[k]=input[k];
+  for(const k of ['autoOrbit','dof']) if(typeof input[k]==='boolean') s[k]=input[k];
   if(['ascent','multiply','network','cascading','radial','shell','bifurcation'].includes(input.form)) s.form=input.form;
   if(['connected','dots','filaments'].includes(input.style)) s.style=input.style;
   if(['off','silk','veil'].includes(input.filamentFinish)) s.filamentFinish=input.filamentFinish;
+  s.workspace=['still','motion'].includes(input.workspace)?input.workspace:(input.sequence==='orbit'||input.loop||input.turntable||input.autoOrbit||['camMove','rotMove','spreadMove','extMove','dofMove','sprouts','drift','burst'].some(k=>input[k]===true)||(typeof input.progress==='number'&&input.progress<1)?'motion':'still');
+  s.autoOrbit=false;
   return s;
 }
 export function random(seed){let a=seed|0;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -79,17 +84,23 @@ export function buildModel(settings){
   }
   return {points,edges,levels,theoreticalTotal,finalCount:Math.round(s.rate**s.generations),sampled:theoreticalTotal>points.length};
 }
-export function edgeSamples(model,edge,form,steps=12){
-  const a=model.points[edge.a].pos,b=model.points[edge.b].pos,result=[];
+// Curvature 100 is the designed bend; 0 draws each connection as a straight chord.
+export function edgeSamples(model,edge,form,steps=12,curvature=100){
+  const a=model.points[edge.a].pos,b=model.points[edge.b].pos,result=[],k=curvature/100;
   for(let j=0;j<=steps;j++){
+    if(j===0){result.push([...a]);continue;}if(j===steps){result.push([...b]);continue;}
     const t=j/steps,u=1-t;
     if(form==='ascent'){
       const dx=b[0]-a[0];
-      result.push([u*u*u*a[0]+3*u*u*t*(a[0]+dx*.55)+3*u*t*t*(b[0]-dx*.35)+t*t*t*b[0],u*u*u*a[1]+3*u*u*t*a[1]+3*u*t*t*b[1]+t*t*t*b[1],u*u*u*a[2]+3*u*u*t*a[2]+3*u*t*t*b[2]+t*t*t*b[2]]);
+      const curve=[u*u*u*a[0]+3*u*u*t*(a[0]+dx*.55)+3*u*t*t*(b[0]-dx*.35)+t*t*t*b[0],u*u*u*a[1]+3*u*u*t*a[1]+3*u*t*t*b[1]+t*t*t*b[1],u*u*u*a[2]+3*u*u*t*a[2]+3*u*t*t*b[2]+t*t*t*b[2]];
+      result.push(curve.map((v,i)=>a[i]*u+b[i]*t+(v-a[i]*u-b[i]*t)*k));
     }else{
-      const lift=form==='network'?1+Math.sin(Math.PI*t)*.03:1;
+      const lift=form==='network'?1+Math.sin(Math.PI*t)*.03*k:1;
       result.push(a.map((v,k)=>(v*u+b[k]*t)*lift));
     }
   }
   return result;
 }
+
+
+export const defaults = sanitize({workspace:'still'});

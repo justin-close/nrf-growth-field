@@ -231,3 +231,11 @@ test('seamless orbit sampling has equal angular steps across the join without a 
   assert(Math.abs(1-samples.at(-1)-(samples[1]-samples[0]))<1e-12);
   assert.equal(stats.closedFrames,6);assert.equal(stats.closedEncoders,1);
 });
+
+
+test('export yields for interaction without chaining background-throttled timers',async t=>{
+  installEncoder(t);let timerYields=0;
+  globalThis.setTimeout=(fn,delay,...args)=>{if(delay===0)timerYields++;return originalSetTimeout(fn,delay,...args);};
+  const result=await exportGrowthVideo({width,height,duration:.4,renderFrame:canvas});
+  assert.equal(result.frames,12);assert.equal(timerYields,0);
+});

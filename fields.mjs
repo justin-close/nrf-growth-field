@@ -1,6 +1,7 @@
 // Art-directed trajectories inspired by natural growth, in arbitrary units.
 // The same deterministic pose is used by WebGL, SVG and video exports.
-import { filamentFade } from './finish.mjs';
+import { filamentFade } from './finish.mjs?v=20261111-motion-core';
+import { driftScale } from './motion.mjs?v=20261111-motion-core';
 export const FIELD_FORMS = ['radial', 'shell', 'bifurcation'];
 export const FIELD_LINE_WIDTH = .65;
 export const isField = form => FIELD_FORMS.includes(form);
@@ -61,6 +62,12 @@ export function buildFieldModel(s) {
       const original=curve;
       curve=Array.from({length:33},(_,j)=>j===0?original[0]:j===32?original[2]:pointOnTrace(original,j/32));
     }
+    // Pull each sample toward the chord between source and tip; 0 is straight.
+    if(s.curvature<100) {
+      const k=s.curvature/100,first=curve[0],last=curve.at(-1);
+      curve=curve.map((p,j)=>{const chord=mix(first,last,j/(curve.length-1));return chord.map((v,m)=>v+(p[m]-v)*k);});
+      for(const mark of marks)mark.pos=pointOnTrace(curve,mark.t);
+    }
     traces.push({points:curve,marks,pulseSteps,birth:Math.log2(i+1)/Math.log2(count),duration:.16+.15*n(i,seed),alpha:.14+.24*n(i,seed+1),variation:n(i,seed+2)});
     points.push({pos:curve.at(-1)});segmentCount+=curve.length-1;
   }
@@ -81,15 +88,21 @@ export function updateFieldPose(model, state, frame, pose=createFieldPose(model)
   let segment=0,dot=1;pose.activeTraces=0;pose.activeMarks=1;
   pose.dotPositions.set(model.source,0);pose.dotAlpha[0]=.95;pose.dotRadius[0]=1.65;
   const setDot=(pos,r,alpha)=>{pose.dotPositions.set(pos,dot*3);pose.dotRadius[dot]=r;pose.dotAlpha[dot]=alpha;if(alpha>.05)pose.activeMarks++;dot++;};
+  const timing=tr=>{const duration=tr.duration*(mode===1?1.05:.98);return{duration,birth:tr.birth*Math.min(.67*(.4+1.2*stagger),.98-duration)};};
+  // Scale so the last trace lands exactly at growth=1, the build's settle time.
+  let finish=0;for(const tr of model.traces){const {duration,birth}=timing(tr);finish=Math.max(finish,birth+duration);}
+  const landed=frame.burst?Infinity:growth*(finish||1);
   for(const tr of model.traces) {
-    const duration=tr.duration*(mode===1?1.05:.98),birth=tr.birth*Math.min(.67*(.4+1.2*stagger),.98-duration);
-    const age=clamp((growth-birth)/duration),t=smooth(age),steps=tr.points.length-1;
+    const {duration,birth}=timing(tr),k=driftScale(tr.variation,frame),src=model.source;
+    // Ambient growth scales each trace out of the source as one piece.
+    const D=k===1?p=>p:p=>p.map((v,m)=>src[m]+(v-src[m])*k);
+    const age=clamp((landed-birth)/duration),t=frame.exact?age:smooth(age),steps=tr.points.length-1;
     if(t>0)pose.activeTraces++;
     const envelope=Math.sin(Math.PI*growth),shine=f=>1+energy*envelope*(mode===2?.9:.35)*Math.max(0,Math.cos(f*12-pulse+tr.variation*6))**12;
     for(let j=1;j<=steps;j++,segment++) {
       const start=(j-1)/steps,end=Math.min(j/steps,t),visible=t>start;
       const a=tr.points[j-1],b=visible?pointOnTrace(tr.points,end):a;
-      pose.linePositions.set(a,segment*6);pose.linePositions.set(b,segment*6+3);
+      pose.linePositions.set(D(a),segment*6);pose.linePositions.set(D(b),segment*6+3);
       const pulseStart=tr.pulseSteps===steps?start:Math.floor(start*tr.pulseSteps)/tr.pulseSteps;
       const pulseEnd=tr.pulseSteps===steps?end:Math.min(pulseStart+1/tr.pulseSteps,t);
       const alpha=visible?Math.min(1,tr.alpha*.6*(state.lineOpacity/35)*smooth(age/.12)*shine((pulseStart+pulseEnd)*.5)):0;
@@ -98,10 +111,15 @@ export function updateFieldPose(model, state, frame, pose=createFieldPose(model)
     }
     for(const mark of tr.marks) {
       const alpha=smooth((t-mark.t+.012)/.012)*mark.alpha*shine(mark.t);
-      setDot(mark.pos,mark.r,Math.min(1,alpha));
+      setDot(D(mark.pos),mark.r,Math.min(1,alpha));
     }
     const tipAlpha=t>0&&t<1?smooth(age/.12)*smooth((1-age)/.1)*(.65+.25*energy):0;
-    setDot(pointOnTrace(tr.points,t),.65+energy*.4,tipAlpha);
+    setDot(D(pointOnTrace(tr.points,t)),.65+energy*.4,tipAlpha);
+  }
+  // Burst: draw the finished field, then scale every mark out of the source.
+  if(frame.burst){
+    const scale=(buffer,count)=>{for(let i=0;i<count*3;i++)buffer[i]=model.source[i%3]+(buffer[i]-model.source[i%3])*growth;};
+    scale(pose.linePositions,segment*2);scale(pose.dotPositions,dot);
   }
   pose.growth=growth;
   return pose;

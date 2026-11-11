@@ -1,11 +1,12 @@
-import { updateCascadingModel } from './cascading.mjs';
-import { filamentFade } from './finish.mjs';
+import { updateCascadingModel } from './cascading.mjs?v=20261111-motion-core';
+import { filamentFade } from './finish.mjs?v=20261111-motion-core';
+import { dofGLSL, dotFadeGLSL, dotShapeGLSL } from './dof.mjs?v=20261111-motion-core';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // Share one dynamic vertex buffer across the mesh, rim and sampled points.
 // Each frame deforms the existing surface; no vertices are born or faded in.
-export function createCascadingArtwork(THREE, model, state, palette, pixelRatio = 1) {
+export function createCascadingArtwork(THREE, model, state, palette, pixelRatio = 1, dof = {}) {
   const group = new THREE.Group();
   group.name = 'cascading-artwork';
   let settings = state;
@@ -30,12 +31,14 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
     // A fixed shader supports every finish; changing controls only uploads
     // vertex alpha values and does not rebuild the surface or its program.
     material.onBeforeCompile = shader => {
-      shader.vertexShader = 'attribute float aFilamentFade;\nvarying float vFilamentFade;\n' + shader.vertexShader;
-      shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFilamentFade = aFilamentFade;');
+      Object.assign(shader.uniforms, dof);
+      shader.vertexShader = dofGLSL + 'attribute float aFilamentFade;\nvarying float vFilamentFade;\n' + shader.vertexShader;
+      // Native lines stay one pixel wide, so out-of-focus segments fade.
+      shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvFilamentFade = aFilamentFade / (1.0 + dofCoc(-mvPosition.z) * .35);');
       shader.fragmentShader = 'varying float vFilamentFade;\n' + shader.fragmentShader;
       shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vFilamentFade;');
     };
-    material.customProgramCacheKey = () => 'nrf-cascading-filament-fade-v1';
+    material.customProgramCacheKey = () => 'nrf-cascading-filament-fade-dof-v2';
   };
   const meshMaterial = new THREE.LineBasicMaterial({
     color: palette.primary, transparent: true, opacity: .42,
@@ -60,25 +63,36 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
       uColor: {value: new THREE.Color(palette.primary)},
       uSize: {value: state.dotSize},
       uPixelRatio: {value: pixelRatio},
-      uOpacity: {value: .82}
+      uOpacity: {value: .82},
+      ...dof
     },
     vertexShader: `
+      ${dofGLSL}
       uniform float uSize;
       uniform float uPixelRatio;
+      varying float vBlur;
+      varying float vAlpha;
       void main() {
         vec4 viewPosition = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * viewPosition;
         gl_PointSize = clamp(uSize * (18.0 / max(2.0, -viewPosition.z)), 1.0, 30.0) * uPixelRatio;
+        float baseSize = gl_PointSize;
+        gl_PointSize += dofCoc(-viewPosition.z) * uPixelRatio;
+        vBlur = 1.0 - baseSize / gl_PointSize;
+        vAlpha = ${dotFadeGLSL};
       }
     `,
     fragmentShader: `
+      ${dotShapeGLSL}
       uniform vec3 uColor;
       uniform float uOpacity;
+      varying float vBlur;
+      varying float vAlpha;
       void main() {
-        float distanceFromCenter = length(gl_PointCoord - .5);
+        float distanceFromCenter = dotDistance(gl_PointCoord);
         if (distanceFromCenter > .5) discard;
-        float edge = 1.0 - smoothstep(.34, .5, distanceFromCenter);
-        gl_FragColor = vec4(uColor, uOpacity * edge);
+        float edge = 1.0 - smoothstep(.34 * (1.0 - vBlur), .5, distanceFromCenter);
+        gl_FragColor = vec4(uColor, uOpacity * vAlpha * edge);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }
@@ -111,8 +125,8 @@ export function createCascadingArtwork(THREE, model, state, palette, pixelRatio 
 
   return {
     group,
-    update(growth) {
-      frame = updateCascadingModel(model, settings, growth);
+    update(growth, exact = false, burst = false, drift = null) {
+      frame = updateCascadingModel(model, settings, growth, exact, burst, drift);
       if (positions.array !== frame.positions) positions.array.set(frame.positions);
       positions.needsUpdate = true;
       return frame;

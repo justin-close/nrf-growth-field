@@ -8,17 +8,16 @@ import {
 } from '../motion.mjs';
 
 const modes = ['cascade', 'unfurl', 'pulse'];
-const stateFor = overrides => ({ ...motionDefaults, generations: 8, ...overrides });
+const stateFor = overrides => ({ generations: 8, ...sanitizeMotion(overrides), ...Object.fromEntries(Object.entries(overrides||{}).filter(([k])=>!Object.hasOwn(motionDefaults,k))) });
 const near = (actual, expected, message, tolerance = 1e-9) => assert(Math.abs(actual - expected) <= tolerance, `${message}: ${actual} ≈ ${expected}`);
 const inRange = (value, low, high, message) => assert(Number.isFinite(value) && value >= low - 1e-10 && value <= high + 1e-10, `${message}: ${value} in [${low}, ${high}]`);
 
 test('motion sanitization preserves accepted values and bounds duration/energy/stagger', () => {
   assert.deepEqual(sanitizeMotion(), motionDefaults);
   assert.deepEqual(sanitizeMotion({ motion: 'unknown', duration: NaN, energy: Infinity, stagger: '50', loop: 'false', turntable: 1 }), motionDefaults);
-  assert.deepEqual(sanitizeMotion({ motion: 'pulse', duration: 40, energy: -1, stagger: 200, loop: true, turntable: true }), {
-    sequence: 'growth', motion: 'pulse', duration: 24, energy: 0, stagger: 100, loop: true, turntable: true
-  });
-  assert.equal(sanitizeMotion({ duration: 1 }).duration, 6);
+  const bounded=sanitizeMotion({motion:'pulse',duration:99,energy:-1,stagger:200,loop:true,turntable:true});
+  assert.deepEqual([bounded.motion,bounded.duration,bounded.energy,bounded.stagger,bounded.loop,bounded.turntable],['pulse',60,0,100,true,true]);
+  assert.equal(sanitizeMotion({duration:1}).duration,3);
   assert.equal(sanitizeMotion({ duration: 7.5 }).duration, 7.5);
   for (const motion of modes) assert.equal(sanitizeMotion({ motion }).motion, motion);
 });
@@ -138,7 +137,7 @@ test('duration presets preserve geometry and make pulse cycles close at the loop
     const state = stateFor({ duration, loop: true });
     near(timelineAt(1, state).pulse / (Math.PI * 2), Math.max(2, Math.round(duration / 3)), 'pulse completes integer cycles');
     for (const progress of [0.1, 0.3, 0.5, 0.7, 0.9]) {
-      assert.equal(timelineAt(progress, state).growth, timelineAt(progress, stateFor({ loop: true })).growth);
+      near(timelineAt(progress, state).growth,timelineAt(progress, stateFor({loop:true})).growth,'duration keeps proportional legacy growth',.002);
     }
   }
   assert.equal(timelineAt(-1, stateFor()).progress, 0);

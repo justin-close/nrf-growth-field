@@ -14,7 +14,7 @@ const forms = ['radial', 'shell', 'bifurcation'];
 const modes = ['cascade', 'unfurl', 'pulse'];
 const counts = {radial:560, shell:620, bifurcation:720};
 const arrayFields = ['linePositions', 'lineAlpha', 'dotPositions', 'dotAlpha', 'dotRadius'];
-const settings = overrides => sanitize({...defaults, ...overrides});
+const settings = overrides => sanitize(overrides);
 const close = (a, b, label, tolerance=1e-6) => assert(Math.abs(a-b) <= tolerance, `${label}: ${a} != ${b}`);
 const positionClose = (actual, expected, label, tolerance=1e-6) => expected.forEach((n, k) => close(actual[k], n, `${label}[${k}]`, tolerance));
 const boundsOf = points => {
@@ -273,7 +273,7 @@ test('production camera fit contains full curves through all three views and tur
   const source=fs.readFileSync(new URL('../app.js',import.meta.url),'utf8');
   const begin=source.indexOf('function resetView('),end=source.indexOf('\nfunction disposeGroup(',begin);
   assert(begin>=0&&end>begin,'production resetView is available');
-  const reset=new Function('THREE','art','model','state','camera','controls','pivot','$$','view','matchMedia',`let dirty=false;\n${source.slice(begin,end)}\nresetView(view);`);
+  const reset=new Function('THREE','art','model','state','camera','controls','pivot','$$','view','matchMedia',`let dirty=false; const compositionBounds=model.framingPoints||model.points.map(p=>p.pos),sproutArtwork=null; const spins=()=>state.workspace==='motion'&&(state.turntable||state.sequence==='orbit'||state.rotMove);\n${source.slice(begin,end)}\nresetView(view);`);
   const axis=new THREE.Vector3(0,1,0);
   for(const form of forms)for(const aspect of [.55,2.3])for(const view of ['perspective','front','top']){
     const state=settings({form,density:35,spread:100,depth:100,twist:180,seed:999999,turntable:true}),model=buildModel(state);

@@ -184,7 +184,7 @@ test('Cascading finish off preserves line opacity and keeps dots circular and un
   assert.strictEqual(mesh.geometry.getAttribute('aFilamentFade'), rim.geometry.getAttribute('aFilamentFade'));
   assert.strictEqual(mesh.geometry.getAttribute('aFilamentFade').array, snapshot.lineFade);
   assert.equal(dots.geometry.getAttribute('aFilamentFade'), undefined);
-  assert.match(dots.material.fragmentShader, /length\(gl_PointCoord - \.5\)/);
+  assert.match(dots.material.fragmentShader, /float dotDistance\(vec2 p\)\{return length\(p-\.5\);\}/);
   assert.doesNotMatch(dots.material.fragmentShader, /FilamentFade/);
 
   // Exercise the hooks against the bundled Three shader, so a chunk-name
@@ -192,12 +192,13 @@ test('Cascading finish off preserves line opacity and keeps dots circular and un
   for (const material of [mesh.material, rim.material]) {
     assert.equal(material.isLineBasicMaterial, true);
     const shader = {
+      uniforms: {},
       vertexShader: THREE.ShaderLib.basic.vertexShader,
       fragmentShader: THREE.ShaderLib.basic.fragmentShader,
     };
     material.onBeforeCompile(shader);
     assert.match(shader.vertexShader, /attribute float aFilamentFade;/);
-    assert.match(shader.vertexShader, /vFilamentFade = aFilamentFade;/);
+    assert.match(shader.vertexShader, /vFilamentFade = aFilamentFade \/ \(1\.0 \+ dofCoc\(-mvPosition.z\) \* \.35\);/);
     assert.match(shader.fragmentShader, /diffuseColor\.a \*= vFilamentFade;/);
     assert(shader.fragmentShader.indexOf('diffuseColor.a *= vFilamentFade;') < shader.fragmentShader.indexOf('#include <alphatest_fragment>'));
   }

@@ -24,13 +24,15 @@ export function sanitizeCascading(settings = {}) {
   };
 }
 
-function deform(settings, requestedGrowth, positions) {
+function deform(settings, requestedGrowth, positions, exact = false) {
   const { foldAmplitude: amplitude, folds } = sanitizeCascading(settings);
   const growth = clamp(finite(requestedGrowth, 1), 0, 1);
-  const expansion = smooth(growth);
+  // An explicit build curve already eases; stacking smoothstep would land early.
+  const ease = exact ? value => clamp(value, 0, 1) : smooth;
+  const expansion = ease(growth);
   const radius = 3.1 * (.12 + .88 * expansion);
-  const buckling = smooth((growth - .10) / .90);
-  const secondaryGrowth = smooth((growth - .35) / .65);
+  const buckling = ease((growth - .10) / .90);
+  const secondaryGrowth = ease((growth - .35) / .65);
   positions[0] = 0;
   positions[1] = -.23;
   positions[2] = 0;
@@ -110,6 +112,27 @@ export function buildCascadingModel(settings = {}) {
   };
 }
 
-export function updateCascadingModel(model, settings = {}, growth = 1) {
-  return deform(settings, growth, model.surface.positions);
+export function updateCascadingModel(model, settings = {}, growth = 1, exact = false, burst = false, drift = null) {
+  const frame = burstOrGrow(model, settings, growth, exact, burst);
+  if (drift) applyDrift(model, frame.positions, drift);
+  return frame;
+}
+
+// Ambient growth: rings ease outward from the centre in turn, inner rings first.
+function applyDrift(model, p, { amount, stagger, progress }) {
+  const { radialCount, angularCount } = model.surface;
+  for (let ring = 1; ring <= radialCount; ring++) {
+    const k = 1 + amount * smooth((progress - ring / radialCount * stagger) / Math.max(1 - stagger, .05));
+    for (let sector = 0, i = (1 + (ring - 1) * angularCount) * 3; sector < angularCount; sector++, i += 3) {
+      for (let m = 0; m < 3; m++) p[i + m] = p[m] + (p[i + m] - p[m]) * k;
+    }
+  }
+}
+
+function burstOrGrow(model, settings, growth, exact, burst) {
+  if (!burst) return deform(settings, growth, model.surface.positions, exact);
+  // Burst: the finished surface, scaled out of its centre vertex.
+  const frame = deform(settings, 1, model.surface.positions, exact), p = frame.positions, g = clamp(finite(growth, 1), 0, 1);
+  for (let i = 3; i < p.length; i++) p[i] = p[i % 3] + (p[i] - p[i % 3]) * g;
+  return { ...frame, growth: g };
 }
