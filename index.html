@@ -93,6 +93,7 @@
       <label class="select-label" for="video-ratio">Frame <select id="video-ratio"><option value="current" selected>Current canvas</option><option value="landscape">Landscape · 16:9</option><option value="square">Square · 1:1</option><option value="portrait">Portrait · 9:16</option></select></label>
       <p class="small-note" id="video-summary"></p><p class="small-note">New aspect ratios fit the artwork while keeping your viewing angle. Timing and effects follow your Motion workspace. Orbit exports one seamless revolution; growth sequences may jump when repeated.</p>
       <button type="button" id="export-video" class="button full-width">Download MP4 ↗</button>
+      <button type="button" id="send-video" class="wide-quiet full-width" title="Adds the MP4 to the NRF27 Screen Visualizer as media. Nothing is downloaded.">Send MP4 to Screen Visualizer ↗</button>
       <p id="video-support" class="small-note" role="status"></p>
     </div>
     <div id="still-options">
@@ -100,6 +101,7 @@
       <label class="select-label" for="export-size">Image size <select id="export-size"><option value="1920">1920 px</option><option value="3840" selected>3840 px</option></select></label>
       <div class="toggle-row"><label for="transparent">Transparent background</label><input type="checkbox" id="transparent" role="switch"></div>
       <div class="export-options"><button type="button" id="export-png" class="button">Download PNG ↗</button><button type="button" id="export-svg" class="wide-quiet">Download SVG ↗</button></div>
+      <button type="button" id="send-png" class="wide-quiet full-width" title="Adds the PNG to the NRF27 Screen Visualizer as media. Nothing is downloaded.">Send PNG to Screen Visualizer ↗</button>
       <p class="small-note">SVG contains editable projected paths and dots. Images use the current canvas aspect ratio. Transparent images omit the background.</p>
     </div>
     <div id="print-options" hidden>
@@ -122,6 +124,6 @@
     <div id="export-progress" hidden><div class="export-progress-heading"><span id="export-status" role="status">Preparing…</span><span id="export-percent" class="mono">0%</span></div><progress id="video-progress" max="1" value="0" aria-label="Video export progress"></progress><button type="button" id="cancel-export" class="wide-quiet">Cancel export</button><p class="small-note">Rendering every frame. Keep this tab open until your download is ready.</p></div>
   </form></dialog>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.js?v=20261111-motion-core"></script>
+  <script type="module" src="app.js?v=20261120-send"></script>
 </body>
 </html>
