@@ -6,6 +6,7 @@ import { timelineAt, extensionBase, driftScale, pointTiming, movingPosition, tra
 import { createDofUniforms, dofGLSL, dotFadeGLSL, dotShapeGLSL, dofCoc, dotFade, hairlineFade } from './dof.mjs?v=20261111-motion-core';
 import { createTimingUI } from './timing-ui.mjs?v=20261111-motion-core';
 import { checkVideoSupport, exportGrowthVideo } from './video-export.mjs?v=20261111-motion-core';
+import { openScreenVisualizer } from './send-to-screen-visualizer.mjs?v=20261120-send';
 import { createCascadingArtwork } from './cascading-scene.mjs?v=20261111-motion-core';
 import { createFieldArtwork } from './fields-scene.mjs?v=20261111-motion-core';
 import { isField, FIELD_LINE_WIDTH, createFieldPose, updateFieldPose } from './fields.mjs?v=20261111-motion-core';
@@ -501,7 +502,7 @@ function initUI(){
   $('panel-toggle').onclick=()=>{const hidden=document.body.classList.toggle('panel-hidden');$('panel-toggle').setAttribute('aria-expanded',!hidden);};
   $('focus').onclick=toggleFocus;$('exit-focus').onclick=toggleFocus;
   $('export-open').onclick=openExport;$('export-png').onclick=()=>exportPNG();$('export-svg').onclick=()=>exportSVG();
-  $('export-video').onclick=exportVideo;$('cancel-export').onclick=()=>exportController?.abort();
+  $('export-video').onclick=exportVideo;$('send-video').onclick=()=>sendVia(exportVideo);$('send-png').onclick=()=>sendVia(exportPNG);$('cancel-export').onclick=()=>exportController?.abort();
   for(const key of ['video-size','video-ratio'])$(key).onchange=updateVideoOptions;
   $$('[data-export-tab]').forEach(b=>b.onclick=()=>setExportTab(b.dataset.exportTab));
   let printUnit='in',printTimer;
@@ -530,7 +531,28 @@ function saveStudy(){if(rebuildTimer)rebuild();const item={id:Date.now(),name:`$
 function renderSaved(){const list=$('saved-list');list.replaceChildren();$('saved-count').textContent=saved.length;if(!saved.length){list.innerHTML='<p class="empty-state">Save a composition to return to it here.</p>';return;}saved.forEach(item=>{const row=document.createElement('div');row.className='saved-row';const restore=document.createElement('button'),label=document.createElement('span'),detail=document.createElement('small'),remove=document.createElement('button');label.textContent=String(item.name||'Saved study');const s=sanitize(item.state);detail.textContent=`${palettes[s.palette].name} · ${s.form==='cascading'?s.folds+' folds':isField(s.form)?s.density+'% density':s.rate.toFixed(1)+'×'}`;restore.append(label,detail);restore.onclick=()=>{state=sanitize(item.state);playing=false;syncUI();rebuild();applyView(item.view);persist();toast('Study restored.');};remove.textContent='×';remove.setAttribute('aria-label',`Remove ${item.name||'saved study'}`);remove.onclick=()=>{saved=saved.filter(x=>x.id!==item.id);renderSaved();persist();};row.append(restore,remove);list.append(row);});}
 async function share(){if(rebuildTimer)rebuild();const hash='#study='+encodeURIComponent(btoa(JSON.stringify({state,view:viewSnapshot()})));const url=location.origin+location.pathname+hash;try{await navigator.clipboard.writeText(url);history.replaceState(null,'',hash);toast('Study link copied, including your camera view.');}catch{history.replaceState(null,'',hash);toast('Study added to the address bar. Copy the URL to share it.');}}
 function toast(message){clearTimeout(toastTimer);$('toast').textContent=message;$('toast').classList.add('visible');toastTimer=setTimeout(()=>$('toast').classList.remove('visible'),3600);}
-function download(blob,extension){const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`nrf-growth-field-${state.form}-${String(state.seed).padStart(4,'0')}.${extension}`;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);}
+// Send to Screen Visualizer: the same PNG or MP4 an export makes, handed to the NRF27 Screen Visualizer's window
+// instead of saved, where it is added as media. The window is opened in the click (a browser blocks one opened later).
+let sendingTo=null;
+function sendVia(action){
+  if(exporting)return;
+  // ?sv=http://localhost:5351 points it at a local Screen Visualizer, for testing.
+  const local=new URLSearchParams(location.search).get('sv');
+  try{sendingTo=openScreenVisualizer(local&&/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(local)?{target:local}:{});}
+  catch(error){toast(error.message);return;}
+  Promise.resolve(action()).finally(()=>{if(sendingTo){sendingTo.close();sendingTo=null;}});
+}
+function download(blob,extension){
+  const name=`nrf-growth-field-${state.form}-${String(state.seed).padStart(4,'0')}.${extension}`;
+  if(sendingTo){
+    const visualizer=sendingTo;sendingTo=null;
+    visualizer.send(blob,name,{tool:'Growth Visualizer'})
+      .then(added=>toast(`Sent to the Screen Visualizer: it is ${added.code} ${added.name} in its Media.`))
+      .catch(error=>toast(`Not sent: ${error.message}`)).finally(()=>visualizer.close());
+    return;
+  }
+  const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),10000);
+}
 function captureView(width,height,transparent=false,fitArtwork=false){
   const snapshot={size:renderer.getSize(new THREE.Vector2()),ratio:renderer.getPixelRatio(),aspect:camera.aspect,fov:camera.fov,controlsEnabled:controls.enabled,position:camera.position.clone(),quaternion:camera.quaternion.clone(),cameraFocus:cameraFocus?.clone()};
   controls.enabled=false;renderer.setPixelRatio(1);renderer.setSize(width,height,false);
@@ -575,9 +597,9 @@ function videoDimensions(){
 async function updateVideoOptions(){
   const revision=++supportRevision,{width,height,fitted}=videoDimensions();
   $('video-summary').textContent=`${width} × ${height}${fitted?' (largest H.264 frame at this ratio)':''} · ${state.duration} seconds · 30 fps · ${state.sequence==='orbit'?'Seamless 360° orbit loop':(state.deconstruct?'Build, hold & return':'Growth + final hold')+(state.loop?' · repeat preview':'')}${state.turntable&&state.sequence!=='orbit'?' · Turntable':''}${state.camMove&&state.sequence!=='orbit'?` · Zoom ${state.zoomFrom}% → ${state.zoomTo}%`:''}${state.rotMove&&state.sequence!=='orbit'?` · Rotate ${state.rotFrom}° → ${state.rotTo}°`:''}${state.spreadMove&&state.sequence!=='orbit'&&state.form!=='cascading'?` · Spread ${state.spreadFrom} → ${state.spread}`:''}${state.dofMove&&state.sequence!=='orbit'?` · Blur ${state.dofFrom}% → ${state.dofTo}%`:''}${state.burst&&state.sequence!=='orbit'?' · From one dot':''}${state.drift&&state.sequence!=='orbit'?` · Ambient growth +${state.driftAmount}%`:''}${sproutsActive(state)?` · ${state.sproutCount} sprouts`:''}${extensionBase(state)!==null?` · Keeps growing gen ${extensionBase(state)} → ${state.generations}`:''}`;
-  $('export-video').disabled=true;$('video-support').textContent='Checking MP4 support…';
+  $('export-video').disabled=$('send-video').disabled=true;$('video-support').textContent='Checking MP4 support…';
   const support=await checkVideoSupport({width,height});if(revision!==supportRevision||exporting)return;
-  $('export-video').disabled=!support.supported;$('video-support').textContent=support.supported?'H.264 MP4 · Solid background · Silent video':support.reason;
+  $('export-video').disabled=$('send-video').disabled=!support.supported;$('video-support').textContent=support.supported?'H.264 MP4 · Solid background · Silent video':support.reason;
 }
 async function exportVideo(){
   if(exporting)return;if(rebuildTimer)rebuild();const {width,height}=videoDimensions();
